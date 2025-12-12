@@ -9,9 +9,10 @@
             [ring.util.jakarta.servlet :as servlet]
             [ring.websocket :as ws])
   (:import (io.modelcontextprotocol.json.jackson JacksonMcpJsonMapper)
-           (io.modelcontextprotocol.server McpServer McpServerFeatures$SyncToolSpecification)
+           (io.modelcontextprotocol.server McpServer McpServerFeatures$SyncToolSpecification McpServerFeatures$SyncResourceSpecification)
            (io.modelcontextprotocol.server.transport HttpServletStreamableServerTransportProvider)
-           (io.modelcontextprotocol.spec McpSchema$CallToolRequest McpSchema$CallToolResult McpSchema$ServerCapabilities McpSchema$Tool McpSchema$ToolAnnotations)
+           (io.modelcontextprotocol.spec McpSchema$CallToolRequest McpSchema$CallToolResult McpSchema$ServerCapabilities McpSchema$Tool McpSchema$ToolAnnotations
+                                         McpSchema$Resource McpSchema$TextResourceContents McpSchema$ReadResourceResult)
            (jakarta.servlet.http HttpServlet)
            (java.io PrintWriter StringWriter)
            (jakarta.servlet.http HttpServletRequest)
@@ -24,6 +25,7 @@
            (org.eclipse.jetty.ee9.servlet ServletContextHandler ServletHandler)
            (org.eclipse.jetty.server Server)))
 
+(set! *warn-on-reflection* true)
 
 (defn lazy-input-stream [delayed-stream]
   (proxy [InputStream] []
@@ -41,26 +43,25 @@
 (defn build-request-map
   "Create the request map from the HttpServletRequest object."
   [^HttpServletRequest request]
-  {:server-port        (.getServerPort request)
-   :server-name        (.getServerName request)
-   :remote-addr        (.getRemoteAddr request)
-   :uri                (.getRequestURI request)
-   :query-string       (.getQueryString request)
-   :scheme             (keyword (.getScheme request))
-   :request-method     (keyword (.toLowerCase (.getMethod request) Locale/ENGLISH))
-   :protocol           (.getProtocol request)
-   :headers            (#'servlet/get-headers request)
-   :content-type       (.getContentType request)
-   :content-length     (#'servlet/get-content-length request)
+  {:server-port (.getServerPort request)
+   :server-name (.getServerName request)
+   :remote-addr (.getRemoteAddr request)
+   :uri (.getRequestURI request)
+   :query-string (.getQueryString request)
+   :scheme (keyword (.getScheme request))
+   :request-method (keyword (.toLowerCase (.getMethod request) Locale/ENGLISH))
+   :protocol (.getProtocol request)
+   :headers (#'servlet/get-headers request)
+   :content-type (.getContentType request)
+   :content-length (#'servlet/get-content-length request)
    :character-encoding (.getCharacterEncoding request)
-   :ssl-client-cert    (#'servlet/get-client-cert request)
-   :body               (lazy-input-stream (fn [] (.getInputStream request)))})
-
+   :ssl-client-cert (#'servlet/get-client-cert request)
+   :body (lazy-input-stream (fn [] (.getInputStream request)))})
 
 (defn proxy-handler [handler options]
   (proxy [ServletHandler] []
     (doHandle [_ ^Request base-request request response]
-      (let [request-map  (build-request-map request)
+      (let [request-map (build-request-map request)
             response-map (handler (with-meta request-map {:request request :response response}))]
         (when-not (.isHandled request)
           (try
@@ -75,7 +76,7 @@
   "Like ring.adapter.jetty/run-jetty but passes the raw request and response along for MCP usage."
   ^Server [handler options]
   (let [server (#'jetty/create-server (dissoc options :configurator))
-        proxy  (proxy-handler handler options)]
+        proxy (proxy-handler handler options)]
     (.setHandler ^Server server ^ServletContextHandler (#'jetty/context-handler proxy))
     (when-let [configurator (:configurator options)]
       (configurator server))
@@ -87,7 +88,6 @@
       (catch Exception ex
         (.stop ^Server server)
         (throw ex)))))
-
 
 (def mcp-mapper
   (JacksonMcpJsonMapper. jsonista/default-object-mapper))
@@ -101,12 +101,11 @@
 
 (def malli-transformer
   (mt/transformer
-    (mt/json-transformer
-      {::mt/keywordize-map-keys true
-       ::mt/json-vectors        true})
-    (mt/default-value-transformer)
-    (mt/collection-transformer)))
-
+   (mt/json-transformer
+    {::mt/keywordize-map-keys true
+     ::mt/json-vectors true})
+   (mt/default-value-transformer)
+   (mt/collection-transformer)))
 
 (defn create-tool-specification
   "Create MCP tool specification from clojure data / function / malli schemas."
@@ -122,76 +121,126 @@
            open-world-hint
            return-direct
            meta]
-    :or   {read-only-hint   false
-           destructive-hint false
-           idempotent-hint  false
-           open-world-hint  false
-           return-direct    false
-           meta             {}}}]
+    :or {read-only-hint false
+         destructive-hint false
+         idempotent-hint false
+         open-world-hint false
+         return-direct false
+         meta {}}}]
   (.build
-    (doto (McpServerFeatures$SyncToolSpecification/builder)
-      (.tool
-        (.build
-          (doto (McpSchema$Tool/builder)
-            (.name name)
-            (.title title)
-            (.description description)
-            (.inputSchema mcp-mapper (jsonista/write-value-as-string (mjs/transform input-schema)))
-            (.outputSchema mcp-mapper (jsonista/write-value-as-string (mjs/transform output-schema)))
-            (.annotations (McpSchema$ToolAnnotations. title read-only-hint destructive-hint idempotent-hint open-world-hint return-direct))
-            (.meta meta))))
-      (.callHandler
-        (let [request-coercer    (m/decoder input-schema malli-transformer)
-              request-explainer  (m/explainer input-schema)
-              response-coercer   (m/decoder output-schema malli-transformer)
-              response-explainer (m/explainer output-schema)]
-          (reify BiFunction
-            (apply [this exchange request]
-              (try
-                (let [request-data         (.arguments ^McpSchema$CallToolRequest request)
-                      ; hack to convert java datastructures into clojure ones.
-                      ; this could be done more efficiently with a protocol
-                      ; instead of serialization roundtrip
-                      clojure-request-data (jsonista/read-value (jsonista/write-value-as-string request-data))
-                      coerced-request-data (request-coercer clojure-request-data)]
-                  (if-some [explanation (request-explainer coerced-request-data)]
-                    (do
-                      (let [ex (ex-info "Invalid request for tool call."
-                                        {:tool        name
-                                         :request     clojure-request-data
-                                         :explanation (me/humanize explanation)})]
-                        (log/error ex (ex-message ex)))
-                      (.build
-                        (doto (McpSchema$CallToolResult/builder)
-                          (.isError true)
-                          (.addTextContent (jsonista/write-value-as-string (me/humanize explanation))))))
-                    (let [response-data         (handler exchange coerced-request-data)
-                          coerced-response-data (response-coercer response-data)]
-                      (if-some [explanation (response-explainer coerced-response-data)]
-                        (do
-                          (let [ex (ex-info "Invalid response from tool call."
-                                            {:tool        name
-                                             :request     coerced-request-data
-                                             :response    coerced-response-data
-                                             :explanation (me/humanize explanation)})]
-                            (log/error ex (ex-message ex)))
-                          (.build
-                            (doto (McpSchema$CallToolResult/builder)
-                              (.isError true)
-                              (.addTextContent (jsonista/write-value-as-string (me/humanize explanation))))))
+   (doto (McpServerFeatures$SyncToolSpecification/builder)
+     (.tool
+      (.build
+       (doto (McpSchema$Tool/builder)
+         (.name name)
+         (.title title)
+         (.description description)
+         (.inputSchema mcp-mapper (jsonista/write-value-as-string (mjs/transform input-schema)))
+         (.outputSchema mcp-mapper (jsonista/write-value-as-string (mjs/transform output-schema)))
+         (.annotations (McpSchema$ToolAnnotations. title read-only-hint destructive-hint idempotent-hint open-world-hint return-direct))
+         (.meta meta))))
+     (.callHandler
+      (let [request-coercer (m/decoder input-schema malli-transformer)
+            request-explainer (m/explainer input-schema)
+            response-coercer (m/decoder output-schema malli-transformer)
+            response-explainer (m/explainer output-schema)]
+        (reify BiFunction
+          (apply [_this exchange request]
+            (try
+              (let [request-data (.arguments ^McpSchema$CallToolRequest request)
+                    ;; hack to convert java datastructures into clojure ones.
+                    ;; this could be done more efficiently with a protocol
+                    ;; instead of serialization roundtrip
+                    clojure-request-data (jsonista/read-value (jsonista/write-value-as-string request-data))
+                    coerced-request-data (request-coercer clojure-request-data)]
+                (if-some [explanation (request-explainer coerced-request-data)]
+                  (do
+                    (let [ex (ex-info "Invalid request for tool call."
+                                      {:tool name
+                                       :request clojure-request-data
+                                       :explanation (me/humanize explanation)})]
+                      (log/error ex (ex-message ex)))
+                    (.build
+                     (doto (McpSchema$CallToolResult/builder)
+                       (.isError true)
+                       (.addTextContent (jsonista/write-value-as-string (me/humanize explanation))))))
+                  (let [response-data (handler exchange coerced-request-data)
+                        coerced-response-data (response-coercer response-data)]
+                    (if-some [explanation (response-explainer coerced-response-data)]
+                      (do
+                        (let [ex (ex-info "Invalid response from tool call."
+                                          {:tool name
+                                           :request coerced-request-data
+                                           :response coerced-response-data
+                                           :explanation (me/humanize explanation)})]
+                          (log/error ex (ex-message ex)))
                         (.build
-                          (doto (McpSchema$CallToolResult/builder)
-                            (.structuredContent mcp-mapper (jsonista/write-value-as-string coerced-response-data))
-                            (.meta (or (meta response-data) {}))))))))
-                (catch Throwable e
-                  (let [ex (ex-info "Exception calling tool." {:tool name :request request} e)]
-                    (log/error ex (ex-message ex)))
-                  (.build
-                    (doto (McpSchema$CallToolResult/builder)
-                      (.isError true)
-                      (.addTextContent (throwable->string e))
-                      (.meta (or (meta e) {})))))))))))))
+                         (doto (McpSchema$CallToolResult/builder)
+                           (.isError true)
+                           (.addTextContent (jsonista/write-value-as-string (me/humanize explanation))))))
+                      (.build
+                       (doto (McpSchema$CallToolResult/builder)
+                         (.structuredContent mcp-mapper (jsonista/write-value-as-string coerced-response-data))
+                         (.meta (or (meta response-data) {}))))))))
+              (catch Throwable e
+                (let [ex (ex-info "Exception calling tool." {:tool name :request request} e)]
+                  (log/error ex (ex-message ex)))
+                (.build
+                 (doto (McpSchema$CallToolResult/builder)
+                   (.isError true)
+                   (.addTextContent (throwable->string e))
+                   (.meta (or (meta e) {})))))))))))))
 
+(defn create-resource-specification
+  "Create MCP resource specification from clojure data / function.
+
+   Takes a map with the following keys:
+    : url          - The URL/URI of the resource (e.g., \"custom://my-resource\")
+    :name         - The name of the resource
+    :description  - A description of what the resource provides
+    :mime-type    - The MIME type of the resource (e.g., \"text/plain\", \"text/markdown\")
+    :handler      - Function that implements the resource retrieval logic.
+                    Signature: (fn [exchange request] ...)
+                      * exchange - The MCP exchange object (usually ignored)
+                      * request  - The ReadResourceRequest object (usually ignored)
+                      * returns  - A vector of strings (the resource content)
+
+   Example:
+   (create-resource-specification
+     {:url \"custom://readme\"
+      :name \"Project README\"
+      :description \"The project's README file\"
+      : mime-type \"text/markdown\"
+      :handler (fn [_exchange _request]
+                 [(slurp \"README.md\")])})"
+  [{:keys [url name description mime-type handler]}]
+  (let [resource (McpSchema$Resource/builder)
+        _ (doto resource
+            (.uri url)
+            (.name name)
+            (.description description)
+            (.mimeType mime-type))
+        resource-obj (.build resource)]
+
+    (McpServerFeatures$SyncResourceSpecification.
+     resource-obj
+     (reify BiFunction
+       (apply [_this exchange request]
+         (try
+           (let [result-strings (handler exchange request)
+                 resource-contents (mapv #(McpSchema$TextResourceContents. url mime-type %)
+                                         result-strings)]
+             (McpSchema$ReadResourceResult. resource-contents))
+           (catch Throwable e
+             (let [ex (ex-info "Exception calling resource handler."
+                               {:url url :name name :request request} e)]
+               (log/error ex (ex-message ex)))
+             ;; Return error content
+             (let [error-content (McpSchema$TextResourceContents.
+                                  url
+                                  "text/plain"
+                                  (str "Error retrieving resource: " (ex-message e)))]
+               (McpSchema$ReadResourceResult. [error-content])))))))))
 
 (defn create-ring-handler
   "Creates a ring handler that functions as a complete streamable-http MCP endpoint. This is
@@ -212,55 +261,55 @@
            instructions
            request-timeout
            keep-alive-interval]
-    :or   {tools               []
-           prompts             []
-           resources           []
-           resource-templates  []
-           experimental        {}
-           completions         []
-           logging             true
-           instructions        "Call these tools to assist the user."
-           request-timeout     (Duration/ofMinutes 30)
-           keep-alive-interval (Duration/ofSeconds 15)}}]
-  (let [tp-provider
-        (.build
-          (doto (HttpServletStreamableServerTransportProvider/builder)
-            (.jsonMapper mcp-mapper)
-            (.keepAliveInterval keep-alive-interval)
-            ; this is important because the MCP servlet verifies
-            ; that the request URI ends with whatever value this
-            ; is set to (defaults to /mcp). We set it to an empty
-            ; string because (.endsWith "anything" "") is always
-            ; true, meaning the handler doesn't care what endpoint
-            ; the ring handler is mounted at.
-            (.mcpEndpoint "")))
-        server
-        (.build
-          (doto (McpServer/sync tp-provider)
-            (.serverInfo name version)
-            (.jsonMapper mcp-mapper)
-            (.completions ^List completions)
-            (.instructions instructions)
-            (.tools ^List tools)
-            (.resources ^List resources)
-            (.resourceTemplates ^List resource-templates)
-            (.prompts ^List prompts)
-            (.requestTimeout request-timeout)
-            (.capabilities
-              (.build
-                (cond-> (McpSchema$ServerCapabilities/builder)
-                        (not-empty experimental)
-                        (.experimental experimental)
-                        (not-empty resources)
-                        (.resources true true)
-                        (not-empty tools)
-                        (.tools true)
-                        (not-empty prompts)
-                        (.prompts true)
-                        (not-empty completions)
-                        (.completions)
-                        logging
-                        (.logging))))))]
+    :or {tools []
+         prompts []
+         resources []
+         resource-templates []
+         experimental {}
+         completions []
+         logging true
+         instructions "Call these tools to assist the user."
+         request-timeout (Duration/ofMinutes 30)
+         keep-alive-interval (Duration/ofSeconds 15)}}]
+  (let [tp-provider (.build
+                     (doto (HttpServletStreamableServerTransportProvider/builder)
+                       (.jsonMapper mcp-mapper)
+                       (.keepAliveInterval keep-alive-interval)
+                       ;; this is important because the MCP servlet verifies
+                       ;; that the request URI ends with whatever value this
+                       ;; is set to (defaults to /mcp). We set it to an empty
+                       ;; string because (.endsWith "anything" "") is always
+                       ;; true, meaning the handler doesn't care what endpoint
+                       ;; the ring handler is mounted at.
+                       (.mcpEndpoint "")))
+        ;; FIXME: figure out how to manage this object's lifecycle - right now stopping the Jetty server
+        ;;        will not close this object and its resources
+        server (.build
+                (doto (McpServer/sync tp-provider)
+                  (.serverInfo name version)
+                  (.jsonMapper mcp-mapper)
+                  (.completions ^List completions)
+                  (.instructions instructions)
+                  (.tools ^List tools)
+                  (.resources ^List resources)
+                  (.resourceTemplates ^List resource-templates)
+                  (.prompts ^List prompts)
+                  (.requestTimeout request-timeout)
+                  (.capabilities
+                   (.build
+                    (cond-> (McpSchema$ServerCapabilities/builder)
+                            (not-empty experimental)
+                            (.experimental experimental)
+                            (not-empty resources)
+                            (.resources true true)
+                            (not-empty tools)
+                            (.tools true)
+                            (not-empty prompts)
+                            (.prompts true)
+                            (not-empty completions)
+                            (.completions)
+                            logging
+                            (.logging))))))]
     (fn handler
       ([request]
        (let [{:keys [request response]} (meta request)]
@@ -271,22 +320,27 @@
        (try (respond (handler request))
             (catch Throwable e (raise e)))))))
 
-
-
 (comment
 
   (def tool
     (create-tool-specification
-      {:name          "add"
-       :title         "Add two numbers"
-       :description   "Adds two numbers together"
-       :input-schema  [:map [:a int?] [:b int?]]
-       :output-schema [:map [:result int?]]
-       :handler       (fn [_exchange {:keys [a b]}]
-                        {:result (+ a b)})}))
+     {:name "add"
+      :title "Add two numbers"
+      :description "Adds two numbers together"
+      :input-schema [:map [:a int?] [:b int?]]
+      :output-schema [:map [:result int?]]
+      :handler (fn [_exchange {:keys [a b]}]
+                 {:result (+ a b)})}))
 
-  (def handler (create-ring-handler {:name "hello-world" :version "1.0.0" :tools [tool]}))
+  (def resource
+    (create-resource-specification
+     {:url "custom://hello"
+      :name "Hello Resource"
+      :description "A simple hello resource"
+      :mime-type "text/plain"
+      :handler (fn [_exchange _request]
+                 ["Hello, World!"])}))
 
-  (def server (run-jetty handler {:port 3000 :join? false}))
+  (def handler (create-ring-handler {:name "hello-world" :version "1.0.0" :tools [tool] :resources [resource]}))
 
-  )
+  (def server (run-jetty handler {:port 3000 :join? false})))
