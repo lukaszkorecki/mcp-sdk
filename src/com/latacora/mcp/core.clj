@@ -21,7 +21,7 @@
            (java.time Duration)
            (java.util Locale)
            (java.util.function BiFunction)
-           (org.eclipse.jetty.ee9.nested Request)
+           (org.eclipse.jetty.ee9.nested Request Response)
            (org.eclipse.jetty.ee9.servlet ServletContextHandler ServletHandler)
            (org.eclipse.jetty.server Server)))
 
@@ -63,14 +63,14 @@
     (doHandle [_ ^Request base-request request response]
       (let [request-map (build-request-map request)
             response-map (handler (with-meta request-map {:request request :response response}))]
-        (when-not (.isHandled request)
+        (when-not (Request/.isHandled request)
           (try
             (if (ws/websocket-response? response-map)
               (#'jetty/upgrade-to-websocket request response response-map options)
               (servlet/update-servlet-response response response-map))
             (finally
-              (-> response .getOutputStream .close)
-              (.setHandled base-request true))))))))
+              (-> response Response/.getOutputStream java.io.Closeable/.close)
+              (Request/.setHandled base-request true))))))))
 
 (defn run-jetty
   "Like ring.adapter.jetty/run-jetty but passes the raw request and response along for MCP usage."
@@ -81,12 +81,12 @@
     (when-let [configurator (:configurator options)]
       (configurator server))
     (try
-      (.start server)
+      (Server/.start server)
       (when (:join? options true)
-        (.join server))
+        (Server/.join server))
       server
       (catch Exception ex
-        (.stop ^Server server)
+        (Server/.stop server)
         (throw ex)))))
 
 (def mcp-mapper
@@ -242,25 +242,21 @@
                                   (str "Error retrieving resource: " (ex-message e)))]
                (McpSchema$ReadResourceResult. [error-content])))))))))
 
-(defn create-ring-handler
-  "Creates a ring handler that functions as a complete streamable-http MCP endpoint. This is
-   intended to be more convenient to incorporate into Clojure servers than the underlying Java
-   library would otherwise support. It achieves this through cooperation with a custom jetty
-   adapter that allows individual ring handlers to assume complete responsibility for the
-   request/response lifecycle and therefore must be used with com.latacora.mcp.core/run-jetty
-   when starting your jetty server. The behavior is otherwise identical to ring.adapter.jetty/run-jetty."
+(defn build-mcp-server
   [{:keys [name
            version
+           completions
+           instructions
            tools
-           prompts
            resources
            resource-templates
-           completions
-           experimental
-           logging
-           instructions
+           prompts
+
            request-timeout
-           keep-alive-interval]
+           keep-alive-interval
+
+           experimental
+           logging]
     :or {tools []
          prompts []
          resources []
@@ -271,21 +267,20 @@
          instructions "Call these tools to assist the user."
          request-timeout (Duration/ofMinutes 30)
          keep-alive-interval (Duration/ofSeconds 15)}}]
-  (let [tp-provider (.build
-                     (doto (HttpServletStreamableServerTransportProvider/builder)
-                       (.jsonMapper mcp-mapper)
-                       (.keepAliveInterval keep-alive-interval)
-                       ;; this is important because the MCP servlet verifies
-                       ;; that the request URI ends with whatever value this
-                       ;; is set to (defaults to /mcp). We set it to an empty
-                       ;; string because (.endsWith "anything" "") is always
-                       ;; true, meaning the handler doesn't care what endpoint
-                       ;; the ring handler is mounted at.
-                       (.mcpEndpoint "")))
-        ;; FIXME: figure out how to manage this object's lifecycle - right now stopping the Jetty server
-        ;;        will not close this object and its resources
+
+  (let [transport-provider (.build
+                            (doto (HttpServletStreamableServerTransportProvider/builder)
+                              (.jsonMapper mcp-mapper)
+                              (.keepAliveInterval keep-alive-interval)
+                              ;; this is important because the MCP servlet verifies
+                              ;; that the request URI ends with whatever value this
+                              ;; is set to (defaults to /mcp). We set it to an empty
+                              ;; string because (.endsWith "anything" "") is always
+                              ;; true, meaning the handler doesn't care what endpoint
+                              ;; the ring handler is mounted at.
+                              (.mcpEndpoint "")))
         server (.build
-                (doto (McpServer/sync tp-provider)
+                (doto (McpServer/sync transport-provider)
                   (.serverInfo name version)
                   (.jsonMapper mcp-mapper)
                   (.completions ^List completions)
@@ -310,15 +305,28 @@
                             (.completions)
                             logging
                             (.logging))))))]
-    (fn handler
-      ([request]
-       (let [{:keys [request response]} (meta request)]
-         (try
-           (.service ^HttpServlet tp-provider request response)
-           (finally (.setHandled request true)))))
-      ([request respond raise]
-       (try (respond (handler request))
-            (catch Throwable e (raise e)))))))
+
+    {:transport-provider transport-provider
+     :mcp-server server}))
+
+(defn create-ring-handler
+  "Creates a ring handler that functions as a complete streamable-http MCP endpoint. This is
+   intended to be more convenient to incorporate into Clojure servers than the underlying Java
+   library would otherwise support. It achieves this through cooperation with a custom jetty
+   adapter that allows individual ring handlers to assume complete responsibility for the
+   request/response lifecycle and therefore must be used with com.latacora.mcp.core/run-jetty
+   when starting your jetty server. The behavior is otherwise identical to ring.adapter.jetty/run-jetty."
+  [{:keys [transport-provider]}]
+  {:pre [transport-provider]}
+  (fn handler
+    ([request]
+     (let [{:keys [request response]} (meta request)]
+       (try
+         (.service ^HttpServlet transport-provider request response)
+         (finally (Request/.setHandled request true)))))
+    ([request respond raise]
+     (try (respond (handler request))
+          (catch Throwable e (raise e))))))
 
 (comment
 
@@ -341,6 +349,10 @@
       :handler (fn [_exchange _request]
                  ["Hello, World!"])}))
 
-  (def handler (create-ring-handler {:name "hello-world" :version "1.0.0" :tools [tool] :resources [resource]}))
+  (def mcp-server (build-mcp-server {:name "hello-world" :version "1.0.0" :tools [tool] :resources [resource]}))
+  (def handler (create-ring-handler mcp-server))
 
-  (def server (run-jetty handler {:port 3000 :join? false})))
+  (def server (run-jetty handler {:port 3000 :join? false}))
+
+  (.stop server)
+  (.close (:mcp-server mcp-server)))
