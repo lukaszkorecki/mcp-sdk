@@ -53,7 +53,7 @@
      (.inputSchema mcp-mapper (jsonista/write-value-as-string (mjs/transform input-schema)))
      (.outputSchema mcp-mapper (jsonista/write-value-as-string (mjs/transform output-schema)))
      (.annotations (McpSchema$ToolAnnotations. title read-only-hint destructive-hint
-                                                idempotent-hint open-world-hint return-direct))
+                                               idempotent-hint open-world-hint return-direct))
      (.meta meta))))
 
 (defn- create-handler-logic
@@ -104,7 +104,7 @@
     (.build
      (doto (McpServerFeatures$SyncToolSpecification/builder)
        (.tool tool-schema)
-       (.callTool
+       (.callHandler
         (reify BiFunction
           (apply [_this _exchange request]
             (CompletableFuture/supplyAsync

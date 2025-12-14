@@ -1,7 +1,8 @@
 (ns mcp2000xl.stateless-test
   (:require [clojure.test :refer [deftest is testing]]
             [mcp2000xl.stateless :as stateless]
-            [mcp2000xl.stateless.tool :as tool]))
+            [mcp2000xl.stateless.tool :as tool]
+            [mcp2000xl.stateless.resource :as resource]))
 
 (def add-tool
   (tool/create-tool-specification
@@ -15,6 +16,15 @@
                     [:result int?]]
     :handler (fn [_exchange {:keys [a b]}]
                {:result (+ a b)})}))
+
+(def readme-resource
+  (resource/create-resource-specification
+   {:url "custom://readme"
+    :name "Project README"
+    :description "The project's README file"
+    :mime-type "text/markdown"
+    :handler (fn [_context _request]
+               ["# Test README\n\nThis is a test."])}))
 
 (deftest test-create-handler
   (testing "Can create a stateless handler"
@@ -127,3 +137,50 @@
       (is (= 999 (:id response)))
       (is (some? (:error response)) "Should have error")
       (is (nil? (:result response)) "Should not have result"))))
+
+(deftest test-create-handler-with-resources
+  (testing "Can create handler with resources"
+    (let [handler (stateless/create-handler
+                   {:name "test-server"
+                    :version "1.0.0"
+                    :tools [add-tool]
+                    :resources [readme-resource]})]
+      (is (some? handler) "Handler should be created with resources"))))
+
+(deftest test-invoke-list-resources
+  (testing "Can list available resources"
+    (let [handler (stateless/create-handler
+                   {:name "test-server"
+                    :version "1.0.0"
+                    :resources [readme-resource]})
+
+          request {:jsonrpc "2.0"
+                   :id 10
+                   :method "resources/list"
+                   :params {}}
+
+          response (stateless/invoke handler request)]
+
+      (is (= "2.0" (:jsonrpc response)))
+      (is (= 10 (:id response)))
+      (is (some? (:result response)) "Should have result")
+      (is (nil? (:error response)) "Should not have error"))))
+
+(deftest test-invoke-read-resource
+  (testing "Can read a resource"
+    (let [handler (stateless/create-handler
+                   {:name "test-server"
+                    :version "1.0.0"
+                    :resources [readme-resource]})
+
+          request {:jsonrpc "2.0"
+                   :id 11
+                   :method "resources/read"
+                   :params {:uri "custom://readme"}}
+
+          response (stateless/invoke handler request)]
+
+      (is (= "2.0" (:jsonrpc response)))
+      (is (= 11 (:id response)))
+      (is (some? (:result response)) "Should have result")
+      (is (nil? (:error response)) "Should not have error"))))

@@ -58,13 +58,13 @@
     (throw (IllegalArgumentException. "Tool :input-schema is required")))
   (when-not output-schema
     (throw (IllegalArgumentException. "Tool :output-schema is required")))
-  
+
   ;; Validate schemas are valid Malli schemas
   (when-not (m/schema? input-schema)
     (throw (IllegalArgumentException. "Tool :input-schema must be a valid Malli schema")))
   (when-not (m/schema? output-schema)
     (throw (IllegalArgumentException. "Tool :output-schema must be a valid Malli schema")))
-  
+
   ;; Return validated tool definition with defaults
   (assoc tool-def
          :read-only-hint read-only-hint
