@@ -1,6 +1,7 @@
 (ns mcp2000xl.server
   (:require [jsonista.core :as jsonista]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [mcp2000xl.tool-builder :as tool-builder])
   (:import (io.modelcontextprotocol.json.jackson JacksonMcpJsonMapper)
            (io.modelcontextprotocol.server McpServer)
            (io.modelcontextprotocol.server.transport StdioServerTransportProvider)
