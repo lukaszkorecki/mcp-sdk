@@ -1,7 +1,7 @@
 (ns mcp2000xl.stateless-test
   (:require [clojure.test :refer [deftest is testing]]
             [mcp2000xl.stateless :as stateless]
-            [mcp2000xl.tool :as tool]))
+            [mcp2000xl.stateless.tool :as tool]))
 
 (def add-tool
   (tool/create-tool-specification
@@ -32,15 +32,15 @@
                    {:name "test-server"
                     :version "1.0.0"
                     :tools [add-tool]})
-          
+
           request {:jsonrpc "2.0"
                    :id 1
                    :method "tools/call"
                    :params {:name "add"
                             :arguments {:a 5 :b 3}}}
-          
+
           response (stateless/invoke handler request)]
-      
+
       (is (= "2.0" (:jsonrpc response)) "Should have jsonrpc version")
       (is (= 1 (:id response)) "Should preserve request ID")
       (is (some? (:result response)) "Should have result")
@@ -52,16 +52,16 @@
                    {:name "test-server"
                     :version "1.0.0"
                     :tools [add-tool]})
-          
+
           ;; Request with keyword keys
           request {:jsonrpc "2.0"
                    :id 2
                    :method "tools/call"
                    :params {:name "add"
                             :arguments {:a 10 :b 20}}}
-          
+
           response (stateless/invoke handler request)]
-      
+
       (is (= "2.0" (:jsonrpc response)))
       (is (= 2 (:id response)))
       (is (some? (:result response)))
@@ -73,14 +73,14 @@
                    {:name "test-server"
                     :version "1.0.0"
                     :tools [add-tool]})
-          
+
           request {:jsonrpc "2.0"
                    :id 3
                    :method "tools/list"
                    :params {}}
-          
+
           response (stateless/invoke handler request)]
-      
+
       (is (= "2.0" (:jsonrpc response)))
       (is (= 3 (:id response)))
       (is (some? (:result response)) "Should have result")
@@ -92,7 +92,7 @@
                    {:name "test-server"
                     :version "1.0.0"
                     :tools [add-tool]})
-          
+
           ;; Test with nested structures, arrays, etc
           request {:jsonrpc "2.0"
                    :id "string-id"
@@ -102,9 +102,9 @@
                             :metadata {:tags ["test" "demo"]
                                        :enabled true
                                        :count 42}}}
-          
+
           response (stateless/invoke handler request)]
-      
+
       (is (= "2.0" (:jsonrpc response)))
       (is (= "string-id" (:id response)) "Should handle string IDs")
       (is (some? (:result response))))))
@@ -115,14 +115,14 @@
                    {:name "test-server"
                     :version "1.0.0"
                     :tools [add-tool]})
-          
+
           request {:jsonrpc "2.0"
                    :id 999
                    :method "nonexistent/method"
                    :params {}}
-          
+
           response (stateless/invoke handler request)]
-      
+
       (is (= "2.0" (:jsonrpc response)))
       (is (= 999 (:id response)))
       (is (some? (:error response)) "Should have error")

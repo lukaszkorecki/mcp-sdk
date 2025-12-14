@@ -5,7 +5,7 @@
             [jsonista.core :as json])
   (:import (io.modelcontextprotocol.json.jackson JacksonMcpJsonMapper)
            (io.modelcontextprotocol.server McpServer McpStatelessServerHandler McpServer$StatelessSyncSpecification)
-           (io.modelcontextprotocol.spec McpStatelessServerTransport McpSchema$ServerCapabilities McpSchema McpSchema$JSONRPCRequest)
+           (io.modelcontextprotocol.spec McpStatelessServerTransport McpSchema$ServerCapabilities McpSchema$JSONRPCRequest)
            (io.modelcontextprotocol.common McpTransportContext)
            (reactor.core.publisher Mono)
            (java.util List)
