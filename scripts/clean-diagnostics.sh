@@ -1,27 +1,30 @@
 #!/usr/bin/env bash
-# Run clojure-lsp diagnostics and show all issues
+# Run diagnostics but filter out known acceptable warnings
 
 set -e
 
-echo "Running clojure-lsp diagnostics..."
+echo "Running clojure-lsp diagnostics (filtering known acceptable warnings)..."
 echo
 
 # Run diagnostics and capture output
 output=$(clojure-lsp diagnostics 2>&1)
 exit_code=$?
 
-# Display the full output
-echo "$output"
+# Filter out acceptable warnings
+filtered=$(echo "$output" | grep -v "unused-public-var.*server.stdio/create" || true)
 
-# Parse output for different severity levels
-errors=$(echo "$output" | grep -c "severity :error" || true)
-warnings=$(echo "$output" | grep -c "severity :warning" || true)
-info=$(echo "$output" | grep -c "severity :info" || true)
-unused=$(echo "$output" | grep -c "unused" || true)
+# Display filtered output
+echo "$filtered"
+
+# Parse filtered output for different severity levels
+errors=$(echo "$filtered" | grep -c "severity :error" || true)
+warnings=$(echo "$filtered" | grep -c "severity :warning" || true)
+info=$(echo "$filtered" | grep -c "severity :info" || true)
+unused=$(echo "$filtered" | grep -c "unused" || true)
 
 echo
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Summary:"
+echo "Summary (after filtering known acceptable warnings):"
 echo "  Errors:   $errors"
 echo "  Warnings: $warnings"
 echo "  Info:     $info"

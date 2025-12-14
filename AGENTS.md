@@ -7,59 +7,93 @@
 ### Goals
 
 1. Provide a clean, idiomatic Clojure API for building MCP servers
-2. Support both STDIO and HTTP transport protocols
+2. Support both STDIO and stateless HTTP protocols
 3. Enable GraalVM native-image compilation (future goal)
-4. Keep the `(create-server {...})` user-facing API pattern
+4. Data-driven: tools and resources defined as plain Clojure maps
 
 ### Non-Goals
 
 - Embedding into Jetty or any specific web server
-- Providing custom HTTP server implementations (users bring their own)
-- Supporting Ring middleware patterns (removed in hard fork)
+- Assuming any particular HTTP server implementation
+- Complex middleware chains (keep it simple)
 
 ## Project Structure
 
 ```
 src/mcp2000xl/
-├── tool.clj      - Tool specification creation with Malli schema validation
-├── resource.clj  - Resource specification creation
-└── server.clj    - MCP server building and configuration
+├── schema.clj              - Validates tool/resource definitions (public API)
+├── server/
+│   └── stdio.clj           - STDIO server (public API)
+├── stateless.clj           - Stateless HTTP handler (public API)
+└── impl/
+    ├── tool.clj            - Tool spec building (internal)
+    └── resource.clj        - Resource spec building (internal)
 
 test/mcp2000xl/
-└── tool_test.clj - Tool specification tests
+├── tool_test.clj           - Tests for impl.tool and impl.resource
+└── stateless_test.clj      - Tests for stateless handler
 ```
 
 ## Architecture
 
-### Namespace Organization
+### Public API Namespaces
 
-- **`mcp2000xl.tool`**: Creates tool specifications using Malli schemas for input/output validation
-  - Exports: `create-tool-specification`
-  - Uses Malli for schema validation and JSON Schema generation
-  - Handles validation errors gracefully with logging
+**`mcp2000xl.schema`** - Validates tool and resource definitions
+- `validate-tool` - Validates a tool definition map
+- `validate-resource` - Validates a resource definition map
+- `validate-tools` - Validates collection of tools
+- `validate-resources` - Validates collection of resources
 
-- **`mcp2000xl.resource`**: Creates resource specifications
-  - Exports: `create-resource-specification`
-  - Resources are URI-based with MIME type support
-  - Error handling returns error content to client
+**`mcp2000xl.server.stdio`** - STDIO server
+- `create` - Creates and starts STDIO server (blocks forever)
+- Takes plain maps for tools/resources
+- Perfect for Claude Desktop integration
 
-- **`mcp2000xl.server`**: Builds MCP server instances
-  - Exports: `build-mcp-server`
-  - Currently only supports HTTP transport via `HttpServletStreamableServerTransportProvider`
-  - Returns map with `:transport-provider` and `:mcp-server` keys
+**`mcp2000xl.stateless`** - Stateless HTTP handler
+- `create-handler` - Creates handler from tool/resource definitions
+- `invoke` - Invokes handler with Clojure data (not JSON!)
+- For Ring integration and web frameworks
+
+### Internal Implementation
+
+**`mcp2000xl.impl.tool`** - Builds tool specifications
+- Uses multimethods to dispatch on `:session-based` or `:stateless`
+- Extracts common handler logic (no duplication)
+- `build-tool` multimethod creates Java SDK specs
+- `build-tools` builds collection
+
+**`mcp2000xl.impl.resource`** - Builds resource specifications
+- Uses multimethods to dispatch on `:session-based` or `:stateless`
+- Extracts common BiFunction handler (zero duplication)
+- `build-resource` multimethod creates Java SDK specs
+- `build-resources` builds collection
 
 ### Key Design Decisions
 
-1. **Hard Fork from Latacora**: This is a hard fork that removed Jetty-specific code to focus on wrapping the MCP SDK directly
+1. **Data-Driven API**: Tools and resources are plain Clojure maps
+   ```clojure
+   {:name "add"
+    :input-schema [:map [:a int?] [:b int?]]
+    :output-schema [:map [:result int?]]
+    :handler (fn [{:keys [a b]}] {:result (+ a b)})}
+   ```
 
-2. **Transport Support**: The MCP Java SDK provides:
-   - `StdioServerTransportProvider` - for STDIO transport
-   - `HttpServletStreamableServerTransportProvider` - for HTTP servlet-based transport
-   - `HttpServletSseServerTransportProvider` - for Server-Sent Events
+2. **Multimethods over case**: More idiomatic Clojure, easier to extend
+   ```clojure
+   (defmulti build-tool (fn [_ server-type] server-type))
+   (defmethod build-tool :session-based [tool-def _] ...)
+   (defmethod build-tool :stateless [tool-def _] ...)
+   ```
 
-3. **No Built-in Web Server**: Users should bring their own HTTP server (Jetty, Undertow, http-kit, etc.) and mount the servlet as needed
+3. **No Duplication**: Common logic extracted
+   - Resource: BiFunction handler identical for both types
+   - Tool: Result building shared, only wrapping differs
 
-4. **Malli Integration**: Tools use Malli schemas for validation and automatic JSON Schema generation
+4. **Transport Support**: 
+   - STDIO: Session-based, uses `StdioServerTransportProvider`
+   - HTTP: Stateless, integrates with Ring/web frameworks
+
+5. **Malli Integration**: Schemas validated at creation time
 
 ## Development Guidelines
 
@@ -80,156 +114,172 @@ test/mcp2000xl/
 3. **Type Hints in doto**: Keep traditional type hints inside `doto` forms:
    ```clojure
    (doto builder
-     (.completions ^List completions)  ;; This is correct
+     (.completions ^List completions)
      (.tools ^List tools))
    ```
 
 4. **Formatting**: Use `clojure-lsp format` to maintain consistent style
 
 5. **Linting**: Run `clojure-lsp diagnostics` before committing
-   - Fix all warnings except `unused-public-var` for exported API functions
+   - Fix all errors
+   - Review warnings and info messages
+   - Pay attention to unused code warnings (likely indicates over-engineering)
+   - Public API functions may show as "unused" - that's OK
 
 ### Testing
 
 - Run all tests: `./scripts/test.sh` or `clj -M:test`
-- Check for reflection warnings during development
-- All tests should pass before committing
-- Use `./scripts/pre-commit.sh` to run all quality checks before committing
-
-### Dependencies
-
-- **Core**: Clojure, MCP SDK (Java), Jackson for JSON
-- **Validation**: Malli for schemas
-- **Logging**: tools.logging
-- **Servlet API**: Jakarta Servlet (required by MCP SDK, but no server implementation)
-- **Testing**: cognitect-labs/test-runner
+- Check reflection: `./scripts/check-reflection.sh`
+- Run linter: `./scripts/lint.sh`
+- All checks: `./scripts/pre-commit.sh`
 
 ### Helper Scripts
 
-The `scripts/` directory contains helper scripts to streamline development:
+The `scripts/` directory contains development tools:
 
-- **`format.sh`**: Format all code with clojure-lsp
-- **`lint.sh`**: Run clojure-lsp diagnostics
-- **`check-reflection.sh`**: Check for reflection warnings
-- **`test.sh`**: Run all tests
-- **`pre-commit.sh`**: Run all quality checks (format, lint, reflection, tests)
+**`check-reflection.sh`**
+- Automatically finds ALL namespaces in `src/`
+- Loads each with `(set! *warn-on-reflection* true)`
+- Lists all namespaces being checked
+- Reports any reflection warnings
 
-All scripts are executable and can be run directly: `./scripts/<script-name>.sh`
+**`lint.sh`**
+- Runs `clojure-lsp diagnostics`
+- Shows full output with all severity levels
+- Counts errors, warnings, info, and unused code
+- Exits with error if ANY issues found
+- Review unused code warnings carefully - they indicate cleanup opportunities
+
+**`format.sh`**
+- Formats all code with clojure-lsp
+- Lists which files were formatted
+
+**`test.sh`**
+- Runs all tests with `clj -M:test`
+- Shows full output including logs
+
+**`pre-commit.sh`**
+- Runs all checks in sequence
+- Format → Lint → Check Reflection → Test
+- Stops on first failure
 
 ### Common Tasks
 
-#### Using Scripts
-
+#### Quick Checks
 ```bash
-# Format code
-./scripts/format.sh
+# Check everything before commit
+./scripts/pre-commit.sh
 
-# Check for linting issues
-./scripts/lint.sh
-
-# Check for reflection warnings
+# Just check reflection (all namespaces automatically)
 ./scripts/check-reflection.sh
 
-# Run all tests
+# Check for linting issues (includes unused code)
+./scripts/lint.sh
+
+# Run tests
+./scripts/test.sh
+```
+
+#### Development Workflow
+```bash
+# 1. Make changes
+vim src/mcp2000xl/...
+
+# 2. Format
+./scripts/format.sh
+
+# 3. Check for issues
+./scripts/lint.sh
+
+# 4. Verify no reflection
+./scripts/check-reflection.sh
+
+# 5. Run tests
 ./scripts/test.sh
 
-# Run all pre-commit checks (format, lint, reflection, test)
+# Or just run everything
 ./scripts/pre-commit.sh
 ```
 
-#### Using Clojure Aliases
+### Linting Notes
 
-```bash
-# Run tests
-clj -M:test
+The linter will catch:
+- **Errors**: Must fix (syntax errors, missing vars, etc.)
+- **Warnings**: Should fix (suspicious code, potential bugs)
+- **Info**: Review carefully (often style issues)
+- **Unused code**: Indicates over-engineering - remove it!
 
-# Check for reflection warnings
-clj -M:check-reflection
+Public API functions in `mcp2000xl.server.stdio` and `mcp2000xl.stateless` may show as "unused" because tests use internal impl namespaces directly. This is OK.
 
-# Run with dev environment (includes test paths)
-clj -M:dev
+## Usage Examples
+
+### STDIO Server (Claude Desktop)
+
+```clojure
+(require '[mcp2000xl.server.stdio :as stdio])
+
+(def my-tool
+  {:name "weather"
+   :description "Get weather for a city"
+   :input-schema [:map [:city string?]]
+   :output-schema [:map [:temp int?] [:condition string?]]
+   :handler (fn [{:keys [city]}]
+              {:temp 72 :condition "sunny"})})
+
+(stdio/create {:name "weather-server"
+               :version "1.0.0"
+               :tools [my-tool]})
+;; Blocks forever, reads stdin/writes stdout
 ```
 
-#### Direct Commands
+### Stateless HTTP Handler (Ring)
 
-```bash
-# Format code (alternative)
-clojure-lsp format
+```clojure
+(require '[mcp2000xl.stateless :as stateless])
 
-# Check for issues (alternative)
-clojure-lsp diagnostics
+(def handler (stateless/create-handler
+               {:name "api-server"
+                :version "1.0.0"
+                :tools [my-tool]}))
+
+(defn ring-handler [request]
+  (if (and (= "/mcp" (:uri request))
+           (= :post (:request-method request)))
+    (let [response (stateless/invoke handler (:body request))]
+      {:status 200
+       :headers {"Content-Type" "application/json"}
+       :body response})
+    {:status 404 :body "Not found"}))
 ```
 
-## TODO / Future Work
+## MCP SDK Integration
+
+Key Java classes:
+- **Server**: `McpServer`, `McpServer.sync()`
+- **Transport**: `StdioServerTransportProvider`, custom `McpStatelessServerTransport`
+- **Specs**: `McpServerFeatures$Sync*Specification`, `McpStatelessServerFeatures$Sync*Specification`
+- **Schema**: `McpSchema$Tool`, `McpSchema$Resource`, `McpSchema$CallToolResult`, etc.
+- **JSON**: `JacksonMcpJsonMapper`
+
+## TODO
 
 ### High Priority
-
-1. **Add STDIO Transport Support**
-   - Create factory function for STDIO servers
-   - Decide on API: separate `create-stdio-server` vs unified `create-server` with `:transport` option
-
-2. **HTTP Transport Refinement**
-   - Document how users should mount the servlet in their web servers
-   - Provide examples for common servers (Jetty standalone, http-kit, Undertow)
-   - Consider if we need helpers for servlet mounting
-
-3. **API Design Questions** (need user input)
-   - How should users choose between STDIO and HTTP?
-   - Option A: `(create-stdio-server {...})` and `(create-http-server {...})`
-   - Option B: `(create-server {:transport :stdio ...})`
-   - Option C: Different setup functions for each transport
+1. Add examples to README
+2. Test GraalVM native-image compilation
+3. Add prompt support (currently not exposed)
 
 ### Medium Priority
-
-4. **GraalVM Native Image Support**
-   - Test compilation with GraalVM
-   - Add reflection configuration if needed
-   - Document native image build process
-
-5. **Documentation**
-   - Add comprehensive README with examples
-   - Document the user-facing API
-   - Show integration with popular web servers
-   - Migration guide from Latacora's version
-
-6. **Testing**
-   - Add tests for resource specifications
-   - Add integration tests for server building
-   - Test STDIO transport when implemented
+4. Add resource templates support
+5. More comprehensive integration tests
+6. Performance benchmarks
 
 ### Low Priority
-
-7. **Additional Features**
-   - Prompts support (currently just passed through)
-   - Completions support
-   - Resource templates
-
-## MCP SDK Integration Notes
-
-The Java SDK classes we interact with:
-
-- **Server Building**: `McpServer`, `McpServer.sync()`
-- **Transport Providers**: 
-  - `HttpServletStreamableServerTransportProvider`
-  - `StdioServerTransportProvider`
-- **Specifications**:
-  - `McpServerFeatures$SyncToolSpecification`
-  - `McpServerFeatures$SyncResourceSpecification`
-- **Schema Objects**: `McpSchema$*` classes for all protocol types
-- **JSON Mapping**: `JacksonMcpJsonMapper`
+7. Completions support
+8. More advanced schema validation features
 
 ## Git Workflow
 
-- Work on `hard-fork` branch (or feature branches)
-- Commit messages should be descriptive
-- Run tests and linting before committing
-- Use conventional commits format when possible
-
-## Contact & Contribution
-
-This is a hard fork with different goals than the original Latacora project. When contributing:
-
-1. Follow the code style guidelines above
-2. Run linting and tests
-3. Focus on the project goals (clean Clojure wrapper, GraalVM support)
-4. Ask questions before major architectural changes
+- Work on `hard-fork` branch
+- Descriptive commit messages
+- Run `./scripts/pre-commit.sh` before committing
+- Use conventional commits when possible
