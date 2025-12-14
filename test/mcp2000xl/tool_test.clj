@@ -1,13 +1,13 @@
-(ns mcp2000xl.core-test
+(ns mcp2000xl.tool-test
   (:require [clojure.test :refer :all]
-            [mcp2000xl.core :as mcp])
+            [mcp2000xl.tool :as tool])
   (:import (io.modelcontextprotocol.server McpServerFeatures$SyncToolSpecification)))
 
 
 (deftest can-build-tool-specs
   (is (instance?
         McpServerFeatures$SyncToolSpecification
-        (mcp/create-tool-specification
+        (tool/create-tool-specification
           {:name          "add"
            :title         "Add two numbers"
            :description   "Adds two numbers together"
