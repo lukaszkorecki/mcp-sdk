@@ -63,32 +63,32 @@
   (log/info "Registered" (count tools) "tools," (count resources) "resources")
 
   (let [transport-provider (StdioServerTransportProvider. mcp-mapper)
-        server (.build
-                (doto (McpServer/sync transport-provider)
-                  (.serverInfo name version)
-                  (.jsonMapper mcp-mapper)
-                  (.completions ^List completions)
-                  (.instructions instructions)
-                  (.tools ^List tools)
-                  (.resources ^List resources)
-                  (.resourceTemplates ^List resource-templates)
-                  (.prompts ^List prompts)
-                  (.requestTimeout request-timeout)
-                  (.capabilities
-                   (.build
-                    (cond-> (McpSchema$ServerCapabilities/builder)
-                            (not-empty experimental)
-                            (.experimental experimental)
-                            (not-empty resources)
-                            (.resources true true)
-                            (not-empty tools)
-                            (.tools true)
-                            (not-empty prompts)
-                            (.prompts true)
-                            (not-empty completions)
-                            (.completions)
-                            logging
-                            (.logging))))))]
+        _server (.build
+                 (doto (McpServer/sync transport-provider)
+                   (.serverInfo name version)
+                   (.jsonMapper mcp-mapper)
+                   (.completions ^List completions)
+                   (.instructions instructions)
+                   (.tools ^List tools)
+                   (.resources ^List resources)
+                   (.resourceTemplates ^List resource-templates)
+                   (.prompts ^List prompts)
+                   (.requestTimeout request-timeout)
+                   (.capabilities
+                    (.build
+                     (cond-> (McpSchema$ServerCapabilities/builder)
+                       (not-empty experimental)
+                       (.experimental experimental)
+                       (not-empty resources)
+                       (.resources true true)
+                       (not-empty tools)
+                       (.tools true)
+                       (not-empty prompts)
+                       (.prompts true)
+                       (not-empty completions)
+                       (.completions)
+                       logging
+                       (.logging))))))]
 
     (log/info "STDIO MCP server started successfully")
     (log/info "Reading from stdin, writing to stdout...")
