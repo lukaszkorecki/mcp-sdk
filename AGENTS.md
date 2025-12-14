@@ -91,9 +91,10 @@ test/mcp2000xl/
 
 ### Testing
 
-- Run tests with: `clj -M:dev -e "(require 'mcp2000xl.tool-test) (clojure.test/run-tests 'mcp2000xl.tool-test)"`
-- Check for reflection warnings during test runs
+- Run all tests: `./scripts/test.sh` or `clj -M:test`
+- Check for reflection warnings during development
 - All tests should pass before committing
+- Use `./scripts/pre-commit.sh` to run all quality checks before committing
 
 ### Dependencies
 
@@ -101,21 +102,62 @@ test/mcp2000xl/
 - **Validation**: Malli for schemas
 - **Logging**: tools.logging
 - **Servlet API**: Jakarta Servlet (required by MCP SDK, but no server implementation)
+- **Testing**: cognitect-labs/test-runner
+
+### Helper Scripts
+
+The `scripts/` directory contains helper scripts to streamline development:
+
+- **`format.sh`**: Format all code with clojure-lsp
+- **`lint.sh`**: Run clojure-lsp diagnostics
+- **`check-reflection.sh`**: Check for reflection warnings
+- **`test.sh`**: Run all tests
+- **`pre-commit.sh`**: Run all quality checks (format, lint, reflection, tests)
+
+All scripts are executable and can be run directly: `./scripts/<script-name>.sh`
 
 ### Common Tasks
 
+#### Using Scripts
+
 ```bash
 # Format code
-clojure-lsp format
+./scripts/format.sh
 
-# Check for issues
-clojure-lsp diagnostics
-
-# Run tests
-clj -M:dev -e "(require 'mcp2000xl.tool-test) (clojure.test/run-tests 'mcp2000xl.tool-test)"
+# Check for linting issues
+./scripts/lint.sh
 
 # Check for reflection warnings
-clj -M:dev -e "(require 'mcp2000xl.tool 'mcp2000xl.resource 'mcp2000xl.server)" 2>&1 | grep -i reflect
+./scripts/check-reflection.sh
+
+# Run all tests
+./scripts/test.sh
+
+# Run all pre-commit checks (format, lint, reflection, test)
+./scripts/pre-commit.sh
+```
+
+#### Using Clojure Aliases
+
+```bash
+# Run tests
+clj -M:test
+
+# Check for reflection warnings
+clj -M:check-reflection
+
+# Run with dev environment (includes test paths)
+clj -M:dev
+```
+
+#### Direct Commands
+
+```bash
+# Format code (alternative)
+clojure-lsp format
+
+# Check for issues (alternative)
+clojure-lsp diagnostics
 ```
 
 ## TODO / Future Work
