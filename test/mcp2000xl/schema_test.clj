@@ -132,6 +132,129 @@
            :output-schema [:map]
            :unexpected-key "should fail"})))))
 
+(deftest tool-string-constraints
+  (testing "Tool :name must be non-empty"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid tool definition"
+         (schema/validate-tool
+          {:name ""
+           :handler identity
+           :input-schema [:map]
+           :output-schema [:map]}))))
+
+  (testing "Tool :name has max length (256)"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid tool definition"
+         (schema/validate-tool
+          {:name (apply str (repeat 257 "x"))
+           :handler identity
+           :input-schema [:map]
+           :output-schema [:map]}))))
+
+  (testing "Tool :title must be non-empty if provided"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid tool definition"
+         (schema/validate-tool
+          {:name "test"
+           :handler identity
+           :input-schema [:map]
+           :output-schema [:map]
+           :title ""}))))
+
+  (testing "Tool :description has max length (4096)"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid tool definition"
+         (schema/validate-tool
+          {:name "test"
+           :handler identity
+           :input-schema [:map]
+           :output-schema [:map]
+           :description (apply str (repeat 4097 "x"))})))))
+
+(deftest resource-string-constraints
+  (testing "Resource :url must be non-empty"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid resource definition"
+         (schema/validate-resource
+          {:url ""
+           :name "test"
+           :mime-type "text/plain"
+           :handler identity}))))
+
+  (testing "Resource :name must be non-empty"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid resource definition"
+         (schema/validate-resource
+          {:url "file:///test"
+           :name ""
+           :mime-type "text/plain"
+           :handler identity}))))
+
+  (testing "Resource :url has max length (2048)"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid resource definition"
+         (schema/validate-resource
+          {:url (apply str (repeat 2049 "x"))
+           :name "test"
+           :mime-type "text/plain"
+           :handler identity})))))
+
+(deftest mime-type-validation
+  (testing "Valid MIME types"
+    (is (schema/validate-resource
+         {:url "file:///test"
+          :name "test"
+          :mime-type "text/plain"
+          :handler identity}))
+    (is (schema/validate-resource
+         {:url "file:///test"
+          :name "test"
+          :mime-type "application/json"
+          :handler identity}))
+    (is (schema/validate-resource
+         {:url "file:///test"
+          :name "test"
+          :mime-type "image/svg+xml"
+          :handler identity}))
+    (is (schema/validate-resource
+         {:url "file:///test"
+          :name "test"
+          :mime-type "text/html; charset=utf-8"
+          :handler identity})))
+
+  (testing "Invalid MIME types"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid resource definition"
+         (schema/validate-resource
+          {:url "file:///test"
+           :name "test"
+           :mime-type "not a mime type"
+           :handler identity})))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid resource definition"
+         (schema/validate-resource
+          {:url "file:///test"
+           :name "test"
+           :mime-type "/json" ; Missing type
+           :handler identity})))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Invalid resource definition"
+         (schema/validate-resource
+          {:url "file:///test"
+           :name "test"
+           :mime-type "text/" ; Missing subtype
+           :handler identity})))))
+
 (deftest valid-resource-definition
   (testing "Valid resource passes validation"
     (is (= {:url "file:///test.txt"

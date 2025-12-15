@@ -8,12 +8,12 @@
 ;; Tool definition schema
 (def Tool
   [:map {:closed true}
-   [:name string?]
+   [:name [:string {:min 1 :max 256}]] ; Non-empty, reasonable length
    [:handler fn?]
    [:input-schema :any] ; Will be validated as Malli schema separately
    [:output-schema :any] ; Will be validated as Malli schema separately
-   [:title {:optional true} string?]
-   [:description {:optional true} string?]
+   [:title {:optional true} [:string {:min 1 :max 512}]]
+   [:description {:optional true} [:string {:max 4096}]]
    [:read-only-hint {:optional true} boolean?]
    [:destructive-hint {:optional true} boolean?]
    [:idempotent-hint {:optional true} boolean?]
@@ -24,11 +24,12 @@
 ;; Resource definition schema
 (def Resource
   [:map {:closed true}
-   [:url string?]
-   [:name string?]
-   [:mime-type string?]
+   [:url [:string {:min 1 :max 2048}]] ; Non-empty URI
+   [:name [:string {:min 1 :max 256}]]
+   ;; MIME type pattern: type/subtype with optional parameters
+   [:mime-type [:re #"^[a-zA-Z0-9][a-zA-Z0-9!#$&^_+-]*/[a-zA-Z0-9][a-zA-Z0-9!#$&^_+.-]*(?:;\s*.+)?$"]]
    [:handler fn?]
-   [:description {:optional true} string?]])
+   [:description {:optional true} [:string {:max 4096}]]])
 
 (defn- validate-malli-schema
   "Validate that a value is a valid Malli schema"
