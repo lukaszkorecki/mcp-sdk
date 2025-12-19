@@ -30,9 +30,9 @@
 (defn create-handler
   "Creates a stateless MCP handler for use in web applications.
    Returns a handler that can be passed to invoke.
-   
+
    Tools and resources are plain Clojure maps (see mcp2000xl.schema for validation).
-   
+
    Options:
    - :name (required) - Server name
    - :version (required) - Server version
@@ -45,9 +45,9 @@
    - :logging - Enable logging (default: true)
    - :experimental - Experimental features map (default: {})
    - :request-timeout - Request timeout Duration (default: 10 seconds for stateless)
-   
+
    Returns: Handler object that can be passed to invoke
-   
+
    Example:
    (def handler (create-handler
                   {:name \"my-server\"
@@ -128,11 +128,11 @@
 
 (defn invoke
   "Invokes the MCP handler with a request as a Clojure map.
-   
+
    Efficiently processes requests by passing Clojure data structures directly
    to the handler without wasteful JSON serialization/deserialization cycles.
    Keys are automatically stringified to ensure compatibility.
-   
+
    Parameters:
    - handler - Handler created with create-handler
    - request-map - JSON-RPC request as Clojure map with keys:
@@ -142,15 +142,15 @@
      - :params (optional) - Request parameters as map
    - opts (optional) - Options map:
      - :timeout-ms - Timeout in milliseconds (default: 30000)
-   
+
    Returns: Clojure map with:
      - :jsonrpc - JSON-RPC version
      - :id - Request ID
      - :result - Result object (on success)
      - :error - Error object (on error)
-   
+
    Example:
-   (invoke handler 
+   (invoke handler
            {:jsonrpc \"2.0\"
             :id 1
             :method \"tools/call\"
@@ -169,7 +169,7 @@
                             (get stringified "id")
                             (get stringified "params"))
 
-           ;; Create empty transport context  
+           ;; Create empty transport context
            context McpTransportContext/EMPTY
 
            ;; Call the handler
@@ -182,13 +182,21 @@
            ^io.modelcontextprotocol.spec.McpSchema$JSONRPCResponse
            response (-> response-mono
                         (.timeout (Duration/ofMillis timeout-ms))
-                        (.block))]
+                        (.block))
 
-       ;; Extract fields to Clojure map - no JSON parsing!
+           ;; Extract fields to Clojure map - convert Java objects to Clojure data
+           result-obj (.result response)
+           error-obj (.error response)]
        {:jsonrpc (.jsonrpc response)
         :id (.id response)
-        :result (.result response)
-        :error (.error response)})
+        :result (when result-obj
+                  (json/read-value
+                   (.writeValueAsString ^JacksonMcpJsonMapper mcp-mapper result-obj)
+                   json/keyword-keys-object-mapper))
+        :error (when error-obj
+                 (json/read-value
+                  (.writeValueAsString ^JacksonMcpJsonMapper mcp-mapper error-obj)
+                  json/keyword-keys-object-mapper))})
 
      (catch Exception e
        (log/error e "Error invoking MCP handler")

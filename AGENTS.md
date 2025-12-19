@@ -19,19 +19,9 @@
 
 ## Project Structure
 
+Run
 ```
-src/mcp2000xl/
-├── schema.clj              - Validates tool/resource definitions (public API)
-├── server/
-│   └── stdio.clj           - STDIO server (public API)
-├── stateless.clj           - Stateless HTTP handler (public API)
-└── impl/
-    ├── tool.clj            - Tool spec building (internal)
-    └── resource.clj        - Resource spec building (internal)
-
-test/mcp2000xl/
-├── tool_test.clj           - Tests for impl.tool and impl.resource
-└── stateless_test.clj      - Tests for stateless handler
+git ls-files
 ```
 
 ## Architecture
@@ -89,7 +79,7 @@ test/mcp2000xl/
    - Resource: BiFunction handler identical for both types
    - Tool: Result building shared, only wrapping differs
 
-4. **Transport Support**: 
+4. **Transport Support**:
    - STDIO: Session-based, uses `StdioServerTransportProvider`
    - HTTP: Stateless, integrates with Ring/web frameworks
 
@@ -106,7 +96,7 @@ test/mcp2000xl/
    ;; Good (standalone calls)
    (Thread/.stop thread)
    (StringWriter/.toString sw)
-   
+
    ;; Old style (only use inside doto/-> threading)
    (.stop ^Thread thread)
    ```
@@ -128,57 +118,13 @@ test/mcp2000xl/
 
 ### Testing
 
-- Run all tests: `./scripts/test.sh` or `clj -M:test`
-- Check reflection: `./scripts/check-reflection.sh`
-- Run linter: `./scripts/lint.sh`
-- All checks: `./scripts/pre-commit.sh`
+- Run all tests:  `clj -M:dev:test`
+- Run linter: `clojure-lsp diagnostics'
 
-### Helper Scripts
-
-The `scripts/` directory contains development tools:
-
-**`check-reflection.sh`**
-- Automatically finds ALL namespaces in `src/`
-- Loads each with `(set! *warn-on-reflection* true)`
-- Lists all namespaces being checked
-- Reports any reflection warnings
-
-**`lint.sh`**
-- Runs `clojure-lsp diagnostics`
-- Shows full output with all severity levels
-- Counts errors, warnings, info, and unused code
-- Exits with error if ANY issues found
-- Review unused code warnings carefully - they indicate cleanup opportunities
-
-**`format.sh`**
-- Formats all code with clojure-lsp
-- Lists which files were formatted
-
-**`test.sh`**
-- Runs all tests with `clj -M:test`
-- Shows full output including logs
-
-**`pre-commit.sh`**
-- Runs all checks in sequence
-- Format → Lint → Check Reflection → Test
-- Stops on first failure
 
 ### Common Tasks
 
-#### Quick Checks
-```bash
-# Check everything before commit
-./scripts/pre-commit.sh
 
-# Just check reflection (all namespaces automatically)
-./scripts/check-reflection.sh
-
-# Check for linting issues (includes unused code)
-./scripts/lint.sh
-
-# Run tests
-./scripts/test.sh
-```
 
 #### Development Workflow
 ```bash
@@ -186,19 +132,15 @@ The `scripts/` directory contains development tools:
 vim src/mcp2000xl/...
 
 # 2. Format
-./scripts/format.sh
+
 
 # 3. Check for issues
-./scripts/lint.sh
 
 # 4. Verify no reflection
-./scripts/check-reflection.sh
+
 
 # 5. Run tests
-./scripts/test.sh
 
-# Or just run everything
-./scripts/pre-commit.sh
 ```
 
 ### Linting Notes
@@ -281,5 +223,5 @@ Key Java classes:
 
 - Work on `hard-fork` branch
 - Descriptive commit messages
-- Run `./scripts/pre-commit.sh` before committing
+- Run all check before commiting
 - Use conventional commits when possible
