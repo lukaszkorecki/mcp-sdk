@@ -42,7 +42,7 @@
    - :resource-templates - Vector of resource templates (default: [])
    - :completions - Vector of completion specifications (default: [])
    - :instructions - Instructions for the AI (default: 'Call these tools to assist the user.')
-   - :logging - Enable logging (default: true)
+   - :logging - Enable logging (default: false)
    - :experimental - Experimental features map (default: {})
    - :request-timeout - Request timeout Duration (default: 10 seconds for stateless)
 
@@ -74,7 +74,7 @@
          resource-templates []
          experimental {}
          completions []
-         logging true
+         logging false
          instructions "Call these tools to assist the user."
          request-timeout (Duration/ofSeconds 10)}}]
 
@@ -96,6 +96,8 @@
     (let [handler-atom (atom nil)
           transport (->HandlerCapturingTransport handler-atom)
           builder (McpServer/sync ^McpStatelessServerTransport transport)
+          ;; NOTE: this is not a 'real' server - we are not hodling on to any resoures etc, so it doesn't need
+          ;;       explicit shutdown or anything like that
           _server (.build
                    (doto ^McpServer$StatelessSyncSpecification builder
                      (.serverInfo name version)
@@ -110,18 +112,12 @@
                      (.capabilities
                       (.build
                        (cond-> (McpSchema$ServerCapabilities/builder)
-                               (not-empty experimental)
-                               (.experimental experimental)
-                               (not-empty built-resources)
-                               (.resources true true)
-                               (not-empty built-tools)
-                               (.tools true)
-                               (not-empty prompts)
-                               (.prompts true)
-                               (not-empty completions)
-                               (.completions)
-                               logging
-                               (.logging))))))]
+                               (not-empty experimental) (.experimental experimental)
+                               (not-empty built-resources) (.resources true true)
+                               (not-empty built-tools) (.tools true)
+                               (not-empty prompts) (.prompts true)
+                               (not-empty completions) (.completions)
+                               logging (.logging))))))]
 
       (log/info "Stateless MCP handler created successfully")
       @handler-atom)))
@@ -173,10 +169,7 @@
            context McpTransportContext/EMPTY
 
            ;; Call the handler
-           response-mono (.handleRequest
-                          ^McpStatelessServerHandler handler
-                          context
-                          jsonrpc-request)
+           response-mono (McpStatelessServerHandler/.handleRequest handler context jsonrpc-request)
 
            ;; Block and get response (with timeout)
            ^io.modelcontextprotocol.spec.McpSchema$JSONRPCResponse
@@ -187,16 +180,21 @@
            ;; Extract fields to Clojure map - convert Java objects to Clojure data
            result-obj (.result response)
            error-obj (.error response)]
-       {:jsonrpc (.jsonrpc response)
-        :id (.id response)
-        :result (when result-obj
-                  (json/read-value
-                   (.writeValueAsString ^JacksonMcpJsonMapper mcp-mapper result-obj)
-                   json/keyword-keys-object-mapper))
-        :error (when error-obj
-                 (json/read-value
-                  (.writeValueAsString ^JacksonMcpJsonMapper mcp-mapper error-obj)
-                  json/keyword-keys-object-mapper))})
+
+       (tap> {:response response
+              :result-obj result-obj
+              :error-obj error-obj})
+
+       (cond-> {:jsonrpc (.jsonrpc response)
+                :id (.id response)}
+               result-obj (assoc :result
+                                 (json/read-value
+                                  (.writeValueAsString ^JacksonMcpJsonMapper mcp-mapper result-obj)
+                                  json/keyword-keys-object-mapper))
+               error-obj (assoc :error
+                                (json/read-value
+                                 (.writeValueAsString ^JacksonMcpJsonMapper mcp-mapper error-obj)
+                                 json/keyword-keys-object-mapper))))
 
      (catch Exception e
        (log/error e "Error invoking MCP handler")

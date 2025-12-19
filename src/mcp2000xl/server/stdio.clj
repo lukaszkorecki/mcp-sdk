@@ -1,6 +1,6 @@
 (ns mcp2000xl.server.stdio
   "STDIO MCP server for session-based communication.
-   
+
    Creates servers that communicate via stdin/stdout, perfect for
    Claude Desktop and other MCP clients that use process-based communication."
   (:require [clojure.tools.logging :as log]
@@ -22,9 +22,9 @@
 
 (defn create
   "Creates and starts a STDIO MCP server. Blocks forever, handling stdin/stdout.
-   
+
    Tools and resources are plain Clojure maps (see mcp2000xl.schema for validation).
-   
+
    Options:
    - :name (required) - Server name
    - :version (required) - Server version
@@ -37,9 +37,9 @@
    - :logging - Enable logging (default: true)
    - :experimental - Experimental features map (default: {})
    - :request-timeout - Request timeout Duration (default: 30 minutes)
-   
+
    Returns: Never (blocks forever)
-   
+
    Example:
    (create {:name \"my-server\"
             :version \"1.0.0\"
@@ -65,7 +65,7 @@
          resource-templates []
          experimental {}
          completions []
-         logging true
+         logging false
          instructions "Call these tools to assist the user."
          request-timeout (Duration/ofMinutes 30)}}]
 
@@ -99,18 +99,17 @@
                      (.capabilities
                       (.build
                        (cond-> (McpSchema$ServerCapabilities/builder)
-                               (not-empty experimental)
-                               (.experimental experimental)
-                               (not-empty built-resources)
-                               (.resources true true)
-                               (not-empty built-tools)
-                               (.tools true)
-                               (not-empty prompts)
-                               (.prompts true)
-                               (not-empty completions)
-                               (.completions)
-                               logging
-                               (.logging))))))]
+                               (not-empty experimental) (.experimental experimental)
+
+                               (not-empty built-resources) (.resources true true)
+
+                               (not-empty built-tools) (.tools true)
+
+                               (not-empty prompts) (.prompts true)
+
+                               (not-empty completions) (.completions)
+
+                               logging (.logging))))))]
 
       (log/info "STDIO MCP server started successfully")
       (log/info "Reading from stdin, writing to stdout...")

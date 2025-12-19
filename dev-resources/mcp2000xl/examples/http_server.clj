@@ -33,14 +33,14 @@
                                       :description "Adds two numbers together"
                                       :input-schema [:map [:a int?] [:b int?]]
                                       :output-schema [:map [:result int?]]
-                                      :handler (fn [_exchange {:keys [a b]}]
+                                      :handler (fn [{:keys [a b]}]
                                                  {:result (+ a b)})}]
 
                              :resources [{:url "custom://hello"
                                           :name "Hello Resource"
                                           :description "A simple hello resource"
                                           :mime-type "text/plain"
-                                          :handler (fn [_exchange _request]
+                                          :handler (fn [_request]
                                                      ["Hello, World!"])}]})
 
    :http-server (component/using
