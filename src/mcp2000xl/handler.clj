@@ -1,4 +1,4 @@
-(ns mcp2000xl.stateless
+(ns mcp2000xl.handler
   "Stateless MCP server support for Ring and other web frameworks"
   (:require [clojure.tools.logging :as log]
             [clojure.walk :as walk]
@@ -27,8 +27,9 @@
     (Mono/empty))
   (close [_]))
 
-(defn create-handler
-  "Creates a stateless MCP handler for use in web applications.
+(defn create
+  "Creates a stateless MCP handler for use in web applications or provided STDIO server
+   (in `mcp2000xl.server.stdio`)
    Returns a handler that can be passed to invoke.
 
    Tools and resources are plain Clojure maps (see mcp2000xl.schema for validation).
@@ -88,8 +89,8 @@
   (log/info "Creating stateless MCP handler:" name "version" version)
 
   ;; Build Java SDK specifications from plain data
-  (let [built-tools (impl.tool/build-tools tools :stateless)
-        built-resources (impl.resource/build-resources resources :stateless)]
+  (let [built-tools (impl.tool/build-tools tools)
+        built-resources (impl.resource/build-resources resources)]
 
     (log/info "Registered" (count built-tools) "tools," (count built-resources) "resources")
 

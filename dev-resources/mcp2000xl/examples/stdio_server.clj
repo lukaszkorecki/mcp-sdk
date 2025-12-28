@@ -1,9 +1,9 @@
 (ns mcp2000xl.examples.stdio-server
   "Example STDIO MCP server with simple tools.
 
-   Demonstrates the stateless STDIO transport for MCP servers."
+   Demonstrates the STDIO transport for MCP servers."
   (:gen-class)
-  (:require [mcp2000xl.server.stdio-stateless :as stdio]))
+  (:require [mcp2000xl.server.stdio :as stdio]))
 
 (def add-tool
   {:name "add"

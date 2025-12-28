@@ -2,7 +2,7 @@
   (:require
    [clojure.tools.logging :as log]
    [com.stuartsierra.component :as component]
-   [mcp2000xl.stateless :as mcp]
+   [mcp2000xl.handler :as mcp]
    [utility-belt.component.jetty :as jetty]
    [utility-belt.component.system :as sys]
    [ring.middleware.defaults :as ring-defaults]
@@ -26,7 +26,7 @@
       (ring-json/wrap-json-body {:keywords? true})))
 
 (defn system []
-  {:mcp (mcp/create-handler {:name "ayo" :version "0.1.0"
+  {:mcp (mcp/create {:name "ayo" :version "0.1.0"
                              :tools [{:name "add"
                                       :title "Add two numbers"
                                       :description "Adds two numbers together"

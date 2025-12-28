@@ -34,14 +34,14 @@ git ls-files
 - `validate-tools` - Validates collection of tools
 - `validate-resources` - Validates collection of resources
 
-**`mcp2000xl.server.stdio-stateless`** - Stateless STDIO server
+**`mcp2000xl.server.stdio`** - Stateless STDIO server
 - `create` - Creates and starts STDIO server (blocks forever)
 - `process-line!` - Process a single JSON-RPC request line
 - Takes plain maps for tools/resources
 - Stateless request handling (no session state)
 - Perfect for Claude Desktop integration
 
-**`mcp2000xl.stateless`** - Stateless HTTP handler
+**`mcp2000xl.handler`** - Stateless HTTP handler
 - `create-handler` - Creates handler from tool/resource definitions
 - `invoke` - Invokes handler with Clojure data (not JSON!)
 - For Ring integration and web frameworks
@@ -158,14 +158,14 @@ The linter will catch:
 - **Info**: Review carefully (often style issues)
 - **Unused code**: Indicates over-engineering - remove it!
 
-Public API functions in `mcp2000xl.server.stdio-stateless` and `mcp2000xl.stateless` may show as "unused" because tests use internal impl namespaces directly. This is OK.
+Public API functions in `mcp2000xl.server.stdio` and `mcp2000xl.handler` may show as "unused" because tests use internal impl namespaces directly. This is OK.
 
 ## Usage Examples
 
 ### STDIO Server (Claude Desktop)
 
 ```clojure
-(require '[mcp2000xl.server.stdio-stateless :as stdio])
+(require '[mcp2000xl.server.stdio :as stdio])
 
 (def my-tool
   {:name "weather"
@@ -184,7 +184,7 @@ Public API functions in `mcp2000xl.server.stdio-stateless` and `mcp2000xl.statel
 ### Stateless HTTP Handler (Ring)
 
 ```clojure
-(require '[mcp2000xl.stateless :as stateless])
+(require '[mcp2000xl.handler :as stateless])
 
 (def handler (stateless/create-handler
                {:name "api-server"

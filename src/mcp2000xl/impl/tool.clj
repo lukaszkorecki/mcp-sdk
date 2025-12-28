@@ -13,15 +13,14 @@
    [malli.transform :as mt]
    [mcp2000xl.impl.json :as json])
   (:import
-
-   (io.modelcontextprotocol.server McpServerFeatures$SyncToolSpecification McpStatelessServerFeatures$SyncToolSpecification)
-   (io.modelcontextprotocol.spec
+   [io.modelcontextprotocol.server McpStatelessServerFeatures$SyncToolSpecification]
+   [io.modelcontextprotocol.spec
     McpSchema$CallToolRequest
     McpSchema$CallToolResult
     McpSchema$Tool
-    McpSchema$ToolAnnotations)
-   (java.io PrintWriter StringWriter)
-   (java.util.function BiFunction)))
+    McpSchema$ToolAnnotations]
+   [java.io PrintWriter StringWriter]
+   [java.util.function BiFunction]))
 
 (set! *warn-on-reflection* true)
 
@@ -131,22 +130,7 @@
             result (handler request-data)]
         (create-tool-result result tool-name)))))
 
-(defmulti build-tool
-  "Build a tool specification based on server type"
-  (fn [_tool-def server-type] server-type))
-
-(defmethod build-tool :session-based
-  [tool-def _]
-  (let [tool-schema (build-tool-schema tool-def)
-        handler (tool-def->handler tool-def)
-        tool-name (:name tool-def)]
-    (.build
-     (doto (McpServerFeatures$SyncToolSpecification/builder)
-       (.tool tool-schema)
-       (.callHandler (handler->bifun tool-name handler))))))
-
-(defmethod build-tool :stateless
-  [tool-def _]
+(defn build-tool [tool-def]
   (let [tool-schema (build-tool-schema tool-def)
         handler (tool-def->handler tool-def)
         tool-name (:name tool-def)]
@@ -160,8 +144,11 @@
 
    Parameters:
    - tool-defs: Collection of tool definition maps
-   - server-type: :session-based or :stateless
 
-   Returns: Vector of Java SDK tool specification objects"
-  [tool-defs server-type]
-  (mapv #(build-tool % server-type) tool-defs))
+   Returns: Vector of Java SDK tool specification objects
+
+  NOTE: Resource definitions must be validated before calling this function - as per `mcp2000xl.schema`
+  this happens automatically when constructing the handler
+  "
+  [tool-defs]
+  (mapv build-tool tool-defs))

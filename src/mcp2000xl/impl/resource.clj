@@ -1,12 +1,11 @@
 (ns mcp2000xl.impl.resource
   "Internal: Build MCP resource specifications from plain data definitions."
   (:require [clojure.tools.logging :as log])
-  (:import (io.modelcontextprotocol.server McpServerFeatures$SyncResourceSpecification
-                                           McpStatelessServerFeatures$SyncResourceSpecification)
-           (io.modelcontextprotocol.spec McpSchema$Resource
-                                         McpSchema$TextResourceContents
-                                         McpSchema$ReadResourceResult)
-           (java.util.function BiFunction)))
+  (:import [io.modelcontextprotocol.server McpStatelessServerFeatures$SyncResourceSpecification]
+           [io.modelcontextprotocol.spec McpSchema$Resource
+            McpSchema$TextResourceContents
+            McpSchema$ReadResourceResult]
+           [java.util.function BiFunction]))
 
 (set! *warn-on-reflection* true)
 
@@ -40,18 +39,7 @@
                                (str "Error retrieving resource: " (ex-message e)))]
             (McpSchema$ReadResourceResult. [error-content])))))))
 
-(defmulti build-resource
-  "Build a resource specification based on server type"
-  (fn [_resource-def server-type] server-type))
-
-(defmethod build-resource :session-based
-  [resource-def _]
-  (McpServerFeatures$SyncResourceSpecification.
-   (build-resource-schema resource-def)
-   (create-resource-handler resource-def)))
-
-(defmethod build-resource :stateless
-  [resource-def _]
+(defn build-resource [resource-def]
   (McpStatelessServerFeatures$SyncResourceSpecification.
    (build-resource-schema resource-def)
    (create-resource-handler resource-def)))
@@ -61,8 +49,10 @@
 
    Parameters:
    - resource-defs: Collection of resource definition maps
-   - server-type: :session-based or :stateless
 
-   Returns: Vector of Java SDK resource specification objects"
-  [resource-defs server-type]
-  (mapv #(build-resource % server-type) resource-defs))
+   Returns: Vector of Java SDK resource specification objects
+  NOTE: Resource definitions must be validated before calling this function - as per `mcp2000xl.schema`
+  this happens automatically when constructing the handler
+  "
+  [resource-defs]
+  (mapv build-resource resource-defs))

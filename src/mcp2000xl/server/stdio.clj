@@ -1,11 +1,11 @@
-(ns mcp2000xl.server.stdio-stateless
+(ns mcp2000xl.server.stdio
   "Stateless STDIO transport for MCP using stateless handler.
    Reads JSON-RPC from stdin, processes with stateless MCP, writes to stdout.
 
    This is useful for simple MCP servers that don't need session state,
    or for integration scenarios where you want fine-grained control over
    the request/response cycle."
-  (:require [mcp2000xl.stateless :as stateless]
+  (:require [mcp2000xl.handler :as handler]
             [jsonista.core :as json]
             [clojure.tools.logging :as log])
   (:import [java.io BufferedReader BufferedWriter InputStreamReader OutputStreamWriter]))
@@ -16,7 +16,7 @@
   "Process a single JSON-RPC request line.
 
    Parameters:
-   - handler - Handler created with mcp2000xl.stateless/create-handler
+   - handler - Handler created with mcp2000xl.handler/create-handler
    - line - JSON-RPC request as string
 
    Returns: JSON-RPC response as string, or nil for notifications"
@@ -28,7 +28,7 @@
         (do
           (log/debug "Ignoring notification" {:method (:method request)})
           nil)
-        (json/write-value-as-string (stateless/invoke handler request))))
+        (json/write-value-as-string (handler/invoke handler request))))
     (catch Exception e
       (log/error e "Error processing request" {:line line})
       (json/write-value-as-string
@@ -48,7 +48,7 @@
 
    Tools and resources are plain Clojure maps (see mcp2000xl.schema for validation).
 
-   Options (same as mcp2000xl.stateless/create-handler):
+   Options (same as mcp2000xl.handler/create-handler):
    - :name (required) - Server name
    - :version (required) - Server version
    - :tools - Vector of tool definition maps (default: [])
@@ -73,7 +73,7 @@
                      :handler (fn [{:keys [a b]}] {:result (+ a b)})}]})"
   [opts]
   (log/info "Creating stateless MCP handler")
-  (let [handler (stateless/create-handler opts)]
+  (let [handler (handler/create opts)]
     (log/info "Starting stateless STDIO server - reading from stdin, writing to stdout")
 
     (with-open [reader (BufferedReader. (InputStreamReader. System/in "UTF-8"))

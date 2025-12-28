@@ -1,38 +1,25 @@
-(ns mcp2000xl.stateless-test
+(ns mcp2000xl.handler-test
   (:require [clojure.test :refer [deftest is testing]]
-            [mcp2000xl.stateless :as stateless]))
+            [mcp2000xl.handler :as handler]))
 
-(def add-tool
-  {:name "add"
-   :title "Add Two Numbers"
-   :description "Adds two numbers together"
-   :input-schema [:map
-                  [:a int?]
-                  [:b int?]]
-   :output-schema [:map
-                   [:result int?]]
-   :handler (fn [{:keys [a b]}]
-              {:result (+ a b)})})
-
-(def readme-resource
-  {:url "custom://readme"
-   :name "Project README"
-   :description "The project's README file"
-   :mime-type "text/markdown"
-   :handler (fn [_request]
-              ["# Test README\n\nThis is a test."])})
-
-(def handler (stateless/create-handler
-              {:name "test-server"
-               :version "1.0.0"
-               :tools [add-tool]
-               :resources [readme-resource]}))
-
-(deftest handler-is-valid-test
-  (testing "Can create a stateless handler"
-    (is (some? handler) "Handler should be created")
-    (is (instance? io.modelcontextprotocol.server.McpStatelessServerHandler handler)
-        "Handler should implement McpStatelessServerHandler")))
+(def handler (handler/create {:name "test-server"
+                              :version "1.0.0"
+                              :tools [{:name "add"
+                                       :title "Add Two Numbers"
+                                       :description "Adds two numbers together"
+                                       :input-schema [:map
+                                                      [:a int?]
+                                                      [:b int?]]
+                                       :output-schema [:map
+                                                       [:result int?]]
+                                       :handler (fn [{:keys [a b]}]
+                                                  {:result (+ a b)})}]
+                              :resources [{:url "custom://readme"
+                                           :name "Project README"
+                                           :description "The project's README file"
+                                           :mime-type "text/markdown"
+                                           :handler (fn [_request]
+                                                      ["# Test README\n\nThis is a test."])}]}))
 
 (deftest init-test
   (testing "invoke returns pure Clojure data structures, not Java objects"
@@ -43,8 +30,7 @@
                                        :capabilities {}
                                        :clientInfo {:name "test-client"
                                                     :version "1.0.0"}}}
-
-          init-response (stateless/invoke handler initialize-request)]
+          init-response (handler/invoke handler initialize-request)]
 
       (is (= {:id 1
               :jsonrpc "2.0"
@@ -62,7 +48,7 @@
                    :method "tools/list"
                    :params {}}
 
-          response (stateless/invoke handler request)]
+          response (handler/invoke handler request)]
 
       (is (= {:id 3
               :jsonrpc "2.0"
@@ -92,7 +78,7 @@
                    :params {:name "add"
                             :arguments {:a 5 :b 3}}}
 
-          response (stateless/invoke handler request)]
+          response (handler/invoke handler request)]
 
       (is (= {:id 1
               :jsonrpc "2.0"
@@ -113,7 +99,7 @@
                                        :enabled true
                                        :count 42}}}
 
-          response (stateless/invoke handler request)]
+          response (handler/invoke handler request)]
 
       (is (= {:id "string-id"
               :jsonrpc "2.0"
@@ -129,7 +115,7 @@
                    :method "nonexistent/method"
                    :params {}}
 
-          response (stateless/invoke handler request)]
+          response (handler/invoke handler request)]
 
       (is (= {:error {:code -32603
                       :data {:type "io.modelcontextprotocol.spec.McpError"}
@@ -145,7 +131,7 @@
                    :method "resources/list"
                    :params {}}
 
-          response (stateless/invoke handler request)]
+          response (handler/invoke handler request)]
 
       (is (= {:id 10
               :jsonrpc "2.0"
@@ -163,7 +149,7 @@
                    :method "resources/read"
                    :params {:uri "custom://readme"}}
 
-          response (stateless/invoke handler request)]
+          response (handler/invoke handler request)]
 
       (is (= {:id 11
               :jsonrpc "2.0"
