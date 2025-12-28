@@ -34,9 +34,11 @@ git ls-files
 - `validate-tools` - Validates collection of tools
 - `validate-resources` - Validates collection of resources
 
-**`mcp2000xl.server.stdio`** - STDIO server
+**`mcp2000xl.server.stdio-stateless`** - Stateless STDIO server
 - `create` - Creates and starts STDIO server (blocks forever)
+- `process-line!` - Process a single JSON-RPC request line
 - Takes plain maps for tools/resources
+- Stateless request handling (no session state)
 - Perfect for Claude Desktop integration
 
 **`mcp2000xl.stateless`** - Stateless HTTP handler
@@ -47,13 +49,13 @@ git ls-files
 ### Internal Implementation
 
 **`mcp2000xl.impl.tool`** - Builds tool specifications
-- Uses multimethods to dispatch on `:session-based` or `:stateless`
+- Uses multimethods to dispatch on `:stateless` server type
 - Extracts common handler logic (no duplication)
 - `build-tool` multimethod creates Java SDK specs
 - `build-tools` builds collection
 
 **`mcp2000xl.impl.resource`** - Builds resource specifications
-- Uses multimethods to dispatch on `:session-based` or `:stateless`
+- Uses multimethods to dispatch on `:stateless` server type
 - Extracts common BiFunction handler (zero duplication)
 - `build-resource` multimethod creates Java SDK specs
 - `build-resources` builds collection
@@ -71,16 +73,15 @@ git ls-files
 2. **Multimethods over case**: More idiomatic Clojure, easier to extend
    ```clojure
    (defmulti build-tool (fn [_ server-type] server-type))
-   (defmethod build-tool :session-based [tool-def _] ...)
    (defmethod build-tool :stateless [tool-def _] ...)
    ```
 
 3. **No Duplication**: Common logic extracted
-   - Resource: BiFunction handler identical for both types
+   - Resource: BiFunction handler for stateless mode
    - Tool: Result building shared, only wrapping differs
 
 4. **Transport Support**:
-   - STDIO: Session-based, uses `StdioServerTransportProvider`
+   - STDIO: Stateless, line-based JSON-RPC protocol
    - HTTP: Stateless, integrates with Ring/web frameworks
 
 5. **Malli Integration**: Schemas validated at creation time
@@ -157,14 +158,14 @@ The linter will catch:
 - **Info**: Review carefully (often style issues)
 - **Unused code**: Indicates over-engineering - remove it!
 
-Public API functions in `mcp2000xl.server.stdio` and `mcp2000xl.stateless` may show as "unused" because tests use internal impl namespaces directly. This is OK.
+Public API functions in `mcp2000xl.server.stdio-stateless` and `mcp2000xl.stateless` may show as "unused" because tests use internal impl namespaces directly. This is OK.
 
 ## Usage Examples
 
 ### STDIO Server (Claude Desktop)
 
 ```clojure
-(require '[mcp2000xl.server.stdio :as stdio])
+(require '[mcp2000xl.server.stdio-stateless :as stdio])
 
 (def my-tool
   {:name "weather"
@@ -177,7 +178,7 @@ Public API functions in `mcp2000xl.server.stdio` and `mcp2000xl.stateless` may s
 (stdio/create {:name "weather-server"
                :version "1.0.0"
                :tools [my-tool]})
-;; Blocks forever, reads stdin/writes stdout
+;; Blocks forever, reads JSON-RPC from stdin/writes to stdout
 ```
 
 ### Stateless HTTP Handler (Ring)
@@ -203,11 +204,11 @@ Public API functions in `mcp2000xl.server.stdio` and `mcp2000xl.stateless` may s
 ## MCP SDK Integration
 
 Key Java classes:
-- **Server**: `McpServer`, `McpServer.sync()`
-- **Transport**: `StdioServerTransportProvider`, custom `McpStatelessServerTransport`
-- **Specs**: `McpServerFeatures$Sync*Specification`, `McpStatelessServerFeatures$Sync*Specification`
-- **Schema**: `McpSchema$Tool`, `McpSchema$Resource`, `McpSchema$CallToolResult`, etc.
-- **JSON**: `JacksonMcpJsonMapper`
+- **Server**: `McpServer`, `McpStatelessServerHandler`
+- **Transport**: Custom stateless transport via `McpStatelessServerTransport`
+- **Specs**: `McpStatelessServerFeatures$Sync*Specification`
+- **Schema**: `McpSchema$Tool`, `McpSchema$Resource`, `McpSchema$CallToolResult`, `McpSchema$JSONRPCRequest`, `McpSchema$JSONRPCResponse`
+- **JSON**: `JacksonMcpJsonMapper`, `jsonista.core` for efficient JSON handling
 
 ## TODO
 

@@ -45,7 +45,7 @@
 
 (defn validate-tool
   "Validate a tool definition map using Malli schema.
-   
+
    Throws ex-info with detailed validation errors if invalid."
   [tool-def]
   (if-let [explanation (m/explain Tool tool-def)]
@@ -60,7 +60,7 @@
 
 (defn validate-resource
   "Validate a resource definition map using Malli schema.
-   
+
    Throws ex-info with detailed validation errors if invalid."
   [resource-def]
   (if-let [explanation (m/explain Resource resource-def)]

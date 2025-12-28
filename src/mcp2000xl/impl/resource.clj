@@ -58,11 +58,11 @@
 
 (defn build-resources
   "Build resource specifications from plain data definitions.
-   
+
    Parameters:
    - resource-defs: Collection of resource definition maps
    - server-type: :session-based or :stateless
-   
+
    Returns: Vector of Java SDK resource specification objects"
   [resource-defs server-type]
   (mapv #(build-resource % server-type) resource-defs))
