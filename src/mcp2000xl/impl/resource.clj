@@ -30,8 +30,7 @@
                                       result-strings)]
           (McpSchema$ReadResourceResult. resource-contents))
         (catch Throwable e
-          (let [ex (ex-info "Exception calling resource handler."
-                            {:url url :request request} e)]
+          (let [ex (ex-info "Exception calling resource handler." {:url url :request request} e)]
             (log/error ex (ex-message ex)))
           (let [error-content (McpSchema$TextResourceContents.
                                url

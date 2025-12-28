@@ -6,13 +6,13 @@
             [mcp2000xl.schema :as schema]
             [mcp2000xl.impl.tool :as impl.tool]
             [mcp2000xl.impl.resource :as impl.resource])
-  (:import (io.modelcontextprotocol.json.jackson JacksonMcpJsonMapper)
-           (io.modelcontextprotocol.server McpServer McpStatelessServerHandler McpServer$StatelessSyncSpecification)
-           (io.modelcontextprotocol.spec McpStatelessServerTransport McpSchema$ServerCapabilities McpSchema$JSONRPCRequest McpSchema$JSONRPCResponse)
-           (io.modelcontextprotocol.common McpTransportContext)
-           (reactor.core.publisher Mono)
-           (java.util List)
-           (java.time Duration)))
+  (:import [io.modelcontextprotocol.json.jackson JacksonMcpJsonMapper]
+           [io.modelcontextprotocol.server McpServer McpStatelessServerHandler McpServer$StatelessSyncSpecification]
+           [io.modelcontextprotocol.spec McpStatelessServerTransport McpSchema$ServerCapabilities McpSchema$JSONRPCRequest McpSchema$JSONRPCResponse]
+           [io.modelcontextprotocol.common McpTransportContext]
+           [reactor.core.publisher Mono]
+           [java.util List]
+           [java.time Duration]))
 
 (set! *warn-on-reflection* true)
 
@@ -97,27 +97,24 @@
           transport (->HandlerCapturingTransport handler-atom)
           builder (McpServer/sync ^McpStatelessServerTransport transport)
           ;; NOTE: this is not a 'real' server - we are not holding on to any resources etc, so it doesn't need
-          ;;       explicit shutdown or anything like that
-          _server (.build
-                   (doto ^McpServer$StatelessSyncSpecification builder
-                     (.serverInfo name version)
-                     (.jsonMapper mcp-mapper)
-                     (.completions ^List completions)
-                     (.instructions instructions)
-                     (.tools ^List built-tools)
-                     (.resources ^List built-resources)
-                     (.resourceTemplates ^List resource-templates)
-                     (.prompts ^List prompts)
-                     (.requestTimeout request-timeout)
-                     (.capabilities
-                      (.build
-                       (cond-> (McpSchema$ServerCapabilities/builder)
-                               (not-empty experimental) (.experimental experimental)
-                               (not-empty built-resources) (.resources true true)
-                               (not-empty built-tools) (.tools true)
-                               (not-empty prompts) (.prompts true)
-                               (not-empty completions) (.completions)
-                               logging (.logging))))))]
+      ;;       explicit shutdown or anything like that
+          _server (.build (doto ^McpServer$StatelessSyncSpecification builder
+                            (.serverInfo name version)
+                            (.jsonMapper mcp-mapper)
+                            (.completions ^List completions)
+                            (.instructions instructions)
+                            (.tools ^List built-tools)
+                            (.resources ^List built-resources)
+                            (.resourceTemplates ^List resource-templates)
+                            (.prompts ^List prompts)
+                            (.requestTimeout request-timeout)
+                            (.capabilities (.build (cond-> (McpSchema$ServerCapabilities/builder)
+                                                           (not-empty experimental) (.experimental experimental)
+                                                           (not-empty built-resources) (.resources true true)
+                                                           (not-empty built-tools) (.tools true)
+                                                           (not-empty prompts) (.prompts true)
+                                                           (not-empty completions) (.completions)
+                                                           logging (.logging))))))]
 
       (log/info "MCP handler created successfully")
       @handler-atom)))

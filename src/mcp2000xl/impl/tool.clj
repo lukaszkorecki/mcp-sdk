@@ -9,15 +9,14 @@
    [malli.json-schema :as mjs]
    [malli.transform :as mt]
    [mcp2000xl.impl.json :as json])
-  (:import
-   [io.modelcontextprotocol.server McpStatelessServerFeatures$SyncToolSpecification]
-   [io.modelcontextprotocol.spec
-    McpSchema$CallToolRequest
-    McpSchema$CallToolResult
-    McpSchema$Tool
-    McpSchema$ToolAnnotations]
-   [java.io PrintWriter StringWriter]
-   [java.util.function BiFunction]))
+  (:import [io.modelcontextprotocol.server McpStatelessServerFeatures$SyncToolSpecification]
+           [io.modelcontextprotocol.spec
+            McpSchema$CallToolRequest
+            McpSchema$CallToolResult
+            McpSchema$Tool
+            McpSchema$ToolAnnotations]
+           [java.io PrintWriter StringWriter]
+           [java.util.function BiFunction]))
 
 (set! *warn-on-reflection* true)
 
@@ -71,10 +70,9 @@
         (if-some [explanation (request-explainer coerced-request-data)]
           ;; Input validation failed
           (do
-            (let [ex (ex-info "Invalid request for tool call."
-                              {:tool name
-                               :request kw-req-data
-                               :explanation (me/humanize explanation)})]
+            (let [ex (ex-info "Invalid request for tool call." {:tool name
+                                                                :request kw-req-data
+                                                                :explanation (me/humanize explanation)})]
               (log/error ex (ex-message ex)))
             {:error true
              :content (jsonista/write-value-as-string (me/humanize explanation))})
@@ -84,11 +82,10 @@
             (if-some [explanation (response-explainer coerced-response-data)]
               ;; Output validation failed
               (do
-                (let [ex (ex-info "Invalid response from tool call."
-                                  {:tool name
-                                   :request coerced-request-data
-                                   :response coerced-response-data
-                                   :explanation (me/humanize explanation)})]
+                (let [ex (ex-info "Invalid response from tool call." {:tool name
+                                                                      :request coerced-request-data
+                                                                      :response coerced-response-data
+                                                                      :explanation (me/humanize explanation)})]
                   (log/error ex (ex-message ex)))
                 {:error true
                  :content (jsonista/write-value-as-string (me/humanize explanation))})

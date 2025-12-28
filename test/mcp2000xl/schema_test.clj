@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [mcp2000xl.schema :as schema]))
 
-(deftest valid-tool-definition
+(deftest valid-tool-definition-test
   (testing "Valid tool passes validation"
     (is (= {:name "test"
             :handler identity
@@ -14,7 +14,7 @@
              :input-schema [:map [:x int?]]
              :output-schema [:map [:result int?]]})))))
 
-(deftest valid-tool-with-optional-fields
+(deftest valid-tool-with-optional-fields-test
   (testing "Tool with all optional fields"
     (is (schema/validate-tool
          {:name "test"
@@ -30,7 +30,7 @@
           :return-direct false
           :meta {:foo "bar"}}))))
 
-(deftest missing-required-tool-fields
+(deftest missing-required-tool-fields-test
   (testing "Missing :name"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -67,7 +67,7 @@
            :handler identity
            :input-schema [:map]})))))
 
-(deftest invalid-tool-field-types
+(deftest invalid-tool-field-types-test
   (testing ":name must be string"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -99,7 +99,7 @@
            :output-schema [:map]
            :read-only-hint "yes"})))))
 
-(deftest invalid-malli-schemas
+(deftest invalid-malli-schemas-test
   (testing "Invalid :input-schema"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -120,7 +120,7 @@
            :input-schema [:map]
            :output-schema [:invalid-schema-type]})))))
 
-(deftest extra-keys-not-allowed
+(deftest extra-keys-not-allowed-test
   (testing "Closed schema - no extra keys"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -132,7 +132,7 @@
            :output-schema [:map]
            :unexpected-key "should fail"})))))
 
-(deftest tool-string-constraints
+(deftest tool-string-constraints-test
   (testing "Tool :name must be non-empty"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -175,7 +175,7 @@
            :output-schema [:map]
            :description (apply str (repeat 4097 "x"))})))))
 
-(deftest resource-string-constraints
+(deftest resource-string-constraints-test
   (testing "Resource :url must be non-empty"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -206,7 +206,7 @@
            :mime-type "text/plain"
            :handler identity})))))
 
-(deftest mime-type-validation
+(deftest mime-type-validation-test
   (testing "Valid MIME types"
     (is (schema/validate-resource
          {:url "file:///test"
@@ -255,7 +255,7 @@
            :mime-type "text/" ; Missing subtype
            :handler identity})))))
 
-(deftest valid-resource-definition
+(deftest valid-resource-definition-test
   (testing "Valid resource passes validation"
     (is (= {:url "file:///test.txt"
             :name "test"
@@ -267,7 +267,7 @@
              :mime-type "text/plain"
              :handler identity})))))
 
-(deftest valid-resource-with-description
+(deftest valid-resource-with-description-test
   (testing "Resource with description"
     (is (schema/validate-resource
          {:url "file:///test.txt"
@@ -276,7 +276,7 @@
           :handler identity
           :description "A test resource"}))))
 
-(deftest missing-required-resource-fields
+(deftest missing-required-resource-fields-test
   (testing "Missing :url"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -313,7 +313,7 @@
            :name "test"
            :mime-type "text/plain"})))))
 
-(deftest invalid-resource-field-types
+(deftest invalid-resource-field-types-test
   (testing ":handler must be function"
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -324,7 +324,7 @@
            :mime-type "text/plain"
            :handler "not a function"})))))
 
-(deftest validate-collections
+(deftest validate-collections-test
   (testing "Validate multiple tools"
     (is (schema/validate-tools
          [{:name "tool1"
