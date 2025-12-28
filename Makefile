@@ -18,5 +18,12 @@ check: ## Check for reflection warnings
 test: ## Run all tests
 	clojure -M:dev:test
 
+
+inspect-stdio: ## Inspect model context protocol stdio example
+	npx @modelcontextprotocol/inspector  clj -M:example-stdio
+
+inspect-http: ## Inspect model context protocol http example
+	npx @modelcontextprotocol/inspector  --transport http --server-url http://localhost:8083/mcp clj -M:example-http
+
 #
 .PHONY: help fmt trim lint check test
