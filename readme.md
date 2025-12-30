@@ -6,6 +6,7 @@ A toolkit for building MCP ([Model Context Protocol](https://modelcontextprotoco
 
 - You can use the provided `mcp2000xl.server.stdio` namespace to create a compliant server using STDIO transport
 - Or integrate your MCP server definition into an existing Ring-based server—it works with any compliant adapter (Jetty, HTTP Kit, and more)
+- Building on top of the Java SDK means that `mcp2000xl` can keep up with protocol changes without being hindered by (quite frankly) complicated transport layer
 
 
 Other features and important notes:
